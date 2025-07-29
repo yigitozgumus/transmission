@@ -28,12 +28,16 @@ gradlePlugin {
             implementationClass = "com.trendyol.transmission.AndroidApplicationConventionPlugin"
         }
         register("kotlinMultiplatform") {
-            id =  "com.trendyol.transmission.kotlin.multiplatform"
+            id = "com.trendyol.transmission.kotlin.multiplatform"
             implementationClass = "com.trendyol.transmission.KotlinMultiplatformConventionPlugin"
         }
         register("dokka") {
             id = "com.trendyol.transmission.dokka"
             implementationClass = "com.trendyol.transmission.DokkaConventionPlugin"
+        }
+        register("detekt") {
+            id = "com.trendyol.transmission.detekt"
+            implementationClass = "com.trendyol.transmission.DetektConventionPlugin"
         }
     }
 }

@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.compose.compiler) apply false
     alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.composeMultiplatform) apply false
+    alias(libs.plugins.detekt) apply false
     alias(libs.plugins.dokka)
 }
 
@@ -17,12 +18,12 @@ val apiVersion = "0.x"
 tasks.dokkaHtmlMultiModule.configure {
     moduleName.set("Transmission")
     outputDirectory.set(layout.buildDirectory.dir("site/api/$apiVersion"))
-    
+
     // Include all library modules but exclude samples
     includes.from("docs/api-overview.md")
-    
+
     dependsOn(":transmission:dokkaHtml")
-    dependsOn(":transmission-test:dokkaHtml")  
+    dependsOn(":transmission-test:dokkaHtml")
     dependsOn(":transmission-viewmodel:dokkaHtml")
 }
 
@@ -31,7 +32,7 @@ tasks.register("generateApiDocs") {
     group = "documentation"
     description = "Generates API documentation for all Transmission modules"
     dependsOn("dokkaHtmlMultiModule")
-    
+
     doLast {
         println("📚 API Documentation generated successfully!")
         println("📖 Location: ${layout.buildDirectory.get().asFile}/site/api/$apiVersion/index.html")
@@ -42,7 +43,7 @@ tasks.register("generateApiDocs") {
 tasks.register("buildMkDocs") {
     group = "documentation"
     description = "Builds MkDocs documentation site"
-    
+
     doLast {
         val result = exec {
             commandLine("mkdocs", "build")
@@ -61,10 +62,10 @@ tasks.register("generateDocs") {
     description = "Generates complete documentation site with MkDocs + API docs"
     dependsOn("buildMkDocs")
     dependsOn("generateApiDocs")
-    
+
     // Ensure API docs are generated after MkDocs build
     tasks.findByName("generateApiDocs")?.mustRunAfter("buildMkDocs")
-    
+
     doLast {
         println("🚀 Complete documentation site generated successfully!")
         println("📖 Site: ${layout.buildDirectory.get().asFile}/site/")
@@ -78,7 +79,7 @@ tasks.register("serveDocs") {
     group = "documentation"
     description = "Builds and serves documentation locally for development"
     dependsOn("generateDocs")
-    
+
     doLast {
         val siteDir = layout.buildDirectory.get().asFile.resolve("site")
         println("🚀 Starting local documentation server...")
@@ -87,7 +88,7 @@ tasks.register("serveDocs") {
         println("💡 The API docs link is available on the main page!")
         println("🛑 Press Ctrl+C to stop the server")
         println("")
-        
+
         // Use Python's built-in HTTP server to serve the complete site
         exec {
             workingDir = siteDir

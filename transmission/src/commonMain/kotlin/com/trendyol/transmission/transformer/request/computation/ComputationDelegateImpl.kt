@@ -9,16 +9,21 @@ internal class ComputationDelegate(
     private val computation: (suspend QueryHandler.() -> Any?)? = null,
 ) : ComputationOwner.Default {
 
+    private var hasResult: Boolean = false
     private var result: Any? = null
 
     private val lock = Mutex()
 
     override suspend fun getResult(scope: QueryHandler, invalidate: Boolean): Any? {
-        return if (useCache && invalidate.not()) {
-            result ?: lock.withLock { computation?.invoke(scope) }.also { result = it }
-        } else {
-            result = null
-            lock.withLock { computation?.invoke(scope) }
+        return lock.withLock {
+            when {
+                useCache.not() -> computation?.invoke(scope)
+                hasResult && invalidate.not() -> result
+                else -> computation?.invoke(scope).also {
+                    result = it
+                    hasResult = true
+                }
+            }
         }
     }
 }
@@ -35,10 +40,7 @@ internal class ComputationDelegateWithArgs<A : Any>(
         return lock.withLock {
             when {
                 useCache.not() -> computation(scope, args)
-                invalidate -> {
-                    results.remove(args)
-                    computation(scope, args)
-                }
+                invalidate -> computation(scope, args).also { results[args] = it }
                 results.containsKey(args) -> results[args]
                 else -> computation(scope, args).also { results[args] = it }
             }

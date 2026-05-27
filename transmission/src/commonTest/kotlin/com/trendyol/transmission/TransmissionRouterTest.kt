@@ -18,6 +18,7 @@ import com.trendyol.transmission.transformer.handler.handlers
 import com.trendyol.transmission.transformer.handler.onSignal
 import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.QueryHandler
+import com.trendyol.transmission.transformer.request.computation.ComputationDelegate
 import com.trendyol.transmission.transformer.request.computation.ComputationDelegateWithArgs
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -307,6 +308,71 @@ class TransmissionRouterTest {
             assertEquals("b-2", firstB)
             assertEquals("a-1", secondA)
             assertEquals(listOf("a", "b"), calls)
+        }
+
+    @Test
+    fun `GIVEN cached computation with args WHEN invalidated THEN it should refresh cached result`() =
+        runTest {
+            // Given
+            var callCount = 0
+            val computation = ComputationDelegateWithArgs<String>(useCache = true) { args ->
+                callCount++
+                "$args-$callCount"
+            }
+            val queryHandler = unusedQueryHandler()
+
+            // When
+            val first = computation.getResult(queryHandler, invalidate = false, args = "a")
+            val refreshed = computation.getResult(queryHandler, invalidate = true, args = "a")
+            val cachedRefresh = computation.getResult(queryHandler, invalidate = false, args = "a")
+
+            // Then
+            assertEquals("a-1", first)
+            assertEquals("a-2", refreshed)
+            assertEquals("a-2", cachedRefresh)
+        }
+
+    @Test
+    fun `GIVEN cached nullable computation WHEN called repeatedly THEN it should cache null result`() =
+        runTest {
+            // Given
+            var callCount = 0
+            val computation = ComputationDelegate(useCache = true) {
+                callCount++
+                null
+            }
+            val queryHandler = unusedQueryHandler()
+
+            // When
+            val first = computation.getResult(queryHandler, invalidate = false)
+            val second = computation.getResult(queryHandler, invalidate = false)
+
+            // Then
+            assertEquals(null, first)
+            assertEquals(null, second)
+            assertEquals(1, callCount)
+        }
+
+    @Test
+    fun `GIVEN cached computation WHEN invalidated THEN it should refresh cached result`() =
+        runTest {
+            // Given
+            var callCount = 0
+            val computation = ComputationDelegate(useCache = true) {
+                callCount++
+                "result-$callCount"
+            }
+            val queryHandler = unusedQueryHandler()
+
+            // When
+            val first = computation.getResult(queryHandler, invalidate = false)
+            val refreshed = computation.getResult(queryHandler, invalidate = true)
+            val cachedRefresh = computation.getResult(queryHandler, invalidate = false)
+
+            // Then
+            assertEquals("result-1", first)
+            assertEquals("result-2", refreshed)
+            assertEquals("result-2", cachedRefresh)
         }
 
     @Test

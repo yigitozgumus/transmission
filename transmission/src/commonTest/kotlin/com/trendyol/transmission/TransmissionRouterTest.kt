@@ -44,7 +44,10 @@ class TransmissionRouterTest {
             }
 
             // Then
-            assertEquals("transformerSet should not be empty", error.message)
+            assertEquals(
+                TransmissionRouter.EMPTY_TRANSFORMER_SET_MESSAGE,
+                error.message
+            )
         }
 
     @Test
@@ -57,8 +60,30 @@ class TransmissionRouterTest {
         }
 
         // Then
-        assertEquals("transformerSet should not be empty", error.message)
+        assertEquals(
+            TransmissionRouter.EMPTY_TRANSFORMER_SET_MESSAGE,
+            error.message
+        )
     }
+
+    @Test
+    fun `GIVEN Router with empty loader WHEN auto initialization runs THEN router should not initialize`() =
+        runTest {
+            // When
+            sut = TransmissionRouter {
+                addLoader(object : TransformerSetLoader {
+                    override suspend fun load(): Set<Transformer> = emptySet()
+                })
+                addDispatcher(testDispatcher)
+            }
+
+            // Then
+            assertEquals(false, sut.isInitialized.value)
+            assertEquals(
+                TransmissionRouter.EMPTY_TRANSFORMER_SET_MESSAGE,
+                sut.initializationError.value?.message
+            )
+        }
 
     @Test
     fun `GIVEN Router with one transformer WHEN initialize is called THEN router should not throw IllegalStateException`() =

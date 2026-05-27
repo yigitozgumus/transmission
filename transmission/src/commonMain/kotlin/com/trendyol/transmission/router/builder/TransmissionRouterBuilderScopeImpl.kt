@@ -1,6 +1,7 @@
 package com.trendyol.transmission.router.builder
 
 import com.trendyol.transmission.router.Capacity
+import com.trendyol.transmission.router.TransmissionRouter.Companion.EMPTY_TRANSFORMER_SET_MESSAGE
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,7 +24,7 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
 
         override fun addTransformerSet(transformerSet: Set<Transformer>) {
             check(transformerSet.isNotEmpty()) {
-                "transformerSet should not be empty"
+                EMPTY_TRANSFORMER_SET_MESSAGE
             }
             val loader = object : TransformerSetLoader {
                 override suspend fun load(): Set<Transformer> {

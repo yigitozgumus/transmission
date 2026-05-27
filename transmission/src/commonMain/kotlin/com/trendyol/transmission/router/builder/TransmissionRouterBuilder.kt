@@ -1,6 +1,7 @@
 package com.trendyol.transmission.router.builder
 
 import com.trendyol.transmission.router.TransmissionRouter
+import com.trendyol.transmission.router.TransmissionRouter.Companion.EMPTY_TRANSFORMER_SET_MESSAGE
 import com.trendyol.transmission.transformer.request.Contract
 
 /**
@@ -46,7 +47,7 @@ fun TransmissionRouter(
         identity = identity,
         transformerSetLoader = if (builder.autoInitialization) {
             builder.transformerSetLoader ?: throw IllegalStateException(
-                "transformerSet should not be empty"
+                EMPTY_TRANSFORMER_SET_MESSAGE
             )
         } else {
             null

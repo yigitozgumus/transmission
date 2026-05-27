@@ -12,12 +12,17 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -75,6 +80,11 @@ class TransmissionRouter internal constructor(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ): StreamOwner {
 
+    internal companion object {
+        internal const val EMPTY_TRANSFORMER_SET_MESSAGE =
+            "TransformerSetLoader or non-empty transformerSet is required when autoInitialization is enabled."
+    }
+
     private val exceptionHandler = CoroutineExceptionHandler { _, _ -> }
     private val routerScope = CoroutineScope(SupervisorJob() + dispatcher + exceptionHandler)
 
@@ -82,6 +92,19 @@ class TransmissionRouter internal constructor(
     internal val transformerSet: Set<Transformer> = _transformerSet
 
     internal val routerName: String = identity.key
+
+    private val _isInitialized = MutableStateFlow(false)
+    private val _initializationError = MutableStateFlow<Throwable?>(null)
+
+    /**
+     * Emits true after the router has successfully loaded and bound transformers.
+     */
+    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
+
+    /**
+     * Contains the latest initialization failure, or null when initialization has not failed.
+     */
+    val initializationError: StateFlow<Throwable?> = _initializationError.asStateFlow()
 
     private val signalBroadcast =
         routerScope.createBroadcast<Transmission.Signal>(capacity = capacity)
@@ -143,11 +166,11 @@ class TransmissionRouter internal constructor(
      * @see TransmissionRouterBuilderScope.overrideInitialization
      * @see TransformerSetLoader
      */
-    fun initialize(loader: TransformerSetLoader) {
+    fun initialize(loader: TransformerSetLoader): Job {
         check(!autoInitialization) {
             "TransmissionRouter is configured to initialize automatically."
         }
-        initializeInternal(loader)
+        return initializeInternal(loader)
     }
 
     /**
@@ -204,16 +227,23 @@ class TransmissionRouter internal constructor(
         }
     }
 
-    private fun initializeInternal(transformerSetLoader: TransformerSetLoader?) {
-        routerScope.launch {
-            transformerSetLoader?.load()?.let { _transformerSet.addAll(it) }
-            initializeTransformers(transformerSet)
+    private fun initializeInternal(transformerSetLoader: TransformerSetLoader?): Job {
+        return routerScope.launch {
+            _isInitialized.update { false }
+            _initializationError.update { null }
+            try {
+                transformerSetLoader?.load()?.let { _transformerSet.addAll(it) }
+                initializeTransformers(transformerSet)
+            } catch (throwable: Throwable) {
+                _initializationError.update { throwable }
+                throw throwable
+            }
         }
     }
 
     private fun initializeTransformers(transformerSet: Set<Transformer>) {
         check(transformerSet.isNotEmpty()) {
-            "transformerSet should not be empty"
+            EMPTY_TRANSFORMER_SET_MESSAGE
         }
         transformerSet.forEach { transformer ->
             transformer.run {
@@ -230,6 +260,7 @@ class TransmissionRouter internal constructor(
                 )
             }
         }
+        _isInitialized.update { true }
     }
 
     /**

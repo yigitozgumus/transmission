@@ -3,57 +3,62 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
-import kotlin.reflect.KClass
 
 typealias SignalLambda = TransmissionLambda<Transmission.Signal>
 typealias EffectLambda = TransmissionLambda<Transmission.Effect>
 
 class HandlerRegistry internal constructor() {
 
+    @PublishedApi
+    internal val signalRoutes = RouteRegistry<Transmission.Signal>()
+
+    @PublishedApi
+    internal val effectRoutes = RouteRegistry<Transmission.Effect>()
+
     internal fun clear() {
-        signalHandlerRegistry.clear()
-        effectHandlerRegistry.clear()
+        signalRoutes.clear()
+        effectRoutes.clear()
     }
 
-    @PublishedApi
-    internal val signalHandlerRegistry =
-        mutableMapOf<KClass<out Transmission.Signal>, StackedLambda<Transmission.Signal>>()
+    internal suspend fun dispatchSignal(
+        scope: CommunicationScope,
+        signal: Transmission.Signal,
+    ) {
+        signalRoutes.dispatch(scope, signal)
+    }
 
-    @PublishedApi
-    internal val effectHandlerRegistry =
-        mutableMapOf<KClass<out Transmission.Effect>, StackedLambda<Transmission.Effect>>()
+    internal suspend fun dispatchEffect(
+        scope: CommunicationScope,
+        effect: Transmission.Effect,
+    ) {
+        effectRoutes.dispatch(scope, effect)
+    }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Signal> signal(
         noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
     ) {
-        signalHandlerRegistry[T::class] = StackedLambda<Transmission.Signal>()
-            .also { it.addOperation(lambda as SignalLambda) }
+        signalRoutes.register(T::class, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Signal> extendSignal(
         noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
     ) {
-        signalHandlerRegistry[T::class] =
-            signalHandlerRegistry[T::class]?.also { it.addOperation(lambda as SignalLambda) }
-                ?: StackedLambda<Transmission.Signal>().also { it.addOperation(lambda as SignalLambda) }
+        signalRoutes.extend(T::class, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Effect> effect(
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
-        effectHandlerRegistry[T::class] =
-            StackedLambda<Transmission.Effect>().also { it.addOperation(lambda as EffectLambda) }
+        effectRoutes.register(T::class, lambda as EffectLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Effect> extendEffect(
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
-        effectHandlerRegistry[T::class] =
-            effectHandlerRegistry[T::class]?.also { it.addOperation(lambda as EffectLambda) }
-                ?: StackedLambda<Transmission.Effect>().also { it.addOperation(lambda as EffectLambda) }
+        effectRoutes.extend(T::class, lambda as EffectLambda)
     }
 }

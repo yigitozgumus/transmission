@@ -12,13 +12,20 @@ import kotlinx.coroutines.channels.Channel
 @OptIn(ExperimentalTransmissionApi::class)
 internal class CommunicationScopeImpl(
     private val effectChannel: Channel<TransmissionEnvelope<Transmission.Effect>>,
-    private val dataChannel: Channel<Transmission.Data>,
+    private val dataChannel: Channel<TransmissionEnvelope<Transmission.Data>>,
     private val queryDelegate: TransformerQueryDelegate,
     private val sourceIdentity: Contract.Identity,
 ) : CommunicationScope {
 
     override suspend fun <D : Transmission.Data> send(data: D?) {
-        data?.let { dataChannel.send(it) }
+        data?.let {
+            dataChannel.send(
+                TransmissionEnvelope(
+                    payload = it,
+                    source = sourceIdentity,
+                )
+            )
+        }
     }
 
     override suspend fun <D : Any> sendPayload(payload: D) {

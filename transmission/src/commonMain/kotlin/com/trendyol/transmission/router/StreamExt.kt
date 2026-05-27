@@ -3,10 +3,12 @@ package com.trendyol.transmission.router
 import com.trendyol.transmission.ExperimentalTransmissionApi
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.effect.RouterEffectWithType
+import com.trendyol.transmission.transformer.request.Contract
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -65,6 +67,18 @@ fun StreamOwner.streamData(): Flow<Transmission.Data> {
 @JvmName("streamDataWithType")
 inline fun <reified T : Transmission.Data> StreamOwner.streamData(): Flow<T> {
     return this.dataStream.filterIsInstance<T>()
+}
+
+/**
+ * Creates a flow of [Transmission.Data] emitted by the data holder identified by [contract].
+ */
+@Suppress("UNCHECKED_CAST")
+fun <T : Transmission.Data> TransmissionRouter.streamData(
+    contract: Contract.DataHolder<T>
+): Flow<T> {
+    return dataEnvelopeStream
+        .filter { it.dataHolder == contract }
+        .map { it.payload as T }
 }
 
 /**
@@ -216,6 +230,22 @@ inline fun <reified T : Transmission.Data?> StreamOwner.streamDataAsState(
     sharingStarted: SharingStarted = SharingStarted.WhileSubscribed(),
 ): StateFlow<T> {
     return this.dataStream.filterIsInstance<T>().stateIn(scope, sharingStarted, initialValue)
+}
+
+/**
+ * Creates a [StateFlow] of data emitted by the data holder identified by [contract].
+ */
+@Suppress("UNCHECKED_CAST")
+fun <T : Transmission.Data?> TransmissionRouter.streamDataAsState(
+    contract: Contract.DataHolder<T>,
+    scope: CoroutineScope,
+    initialValue: T,
+    sharingStarted: SharingStarted = SharingStarted.WhileSubscribed(),
+): StateFlow<T> {
+    return dataEnvelopeStream
+        .filter { it.dataHolder == contract }
+        .map { it.payload as T }
+        .stateIn(scope, sharingStarted, initialValue)
 }
 
 /**

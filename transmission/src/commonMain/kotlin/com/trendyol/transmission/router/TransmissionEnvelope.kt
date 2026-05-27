@@ -7,4 +7,5 @@ internal data class TransmissionEnvelope<out T : Transmission>(
     val payload: T,
     val source: Contract.Identity? = null,
     val target: Contract.Identity? = null,
+    val dataHolder: Contract.DataHolder<*>? = null,
 )

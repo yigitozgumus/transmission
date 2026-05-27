@@ -109,6 +109,8 @@ class TransmissionRouter internal constructor(
 
     private val checkpointTracker = CheckpointTracker()
 
+    internal val dataEnvelopeStream = transmissionBus.dataStream
+
     override val dataStream = transmissionBus.dataPayloadStream
 
     override val effectStream: SharedFlow<Transmission.Effect> = transmissionBus.effectPayloadStream

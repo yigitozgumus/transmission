@@ -100,7 +100,7 @@ open class Transformer(
     internal val identity: Contract.Identity = _identity
 
     private val effectChannel: Channel<TransmissionEnvelope<Transmission.Effect>> = Channel(capacity = capacity.value)
-    internal val dataChannel: Channel<Transmission.Data> = Channel(capacity = capacity.value)
+    internal val dataChannel: Channel<TransmissionEnvelope<Transmission.Data>> = Channel(capacity = capacity.value)
 
     internal val dataEmissionInitialized = MutableStateFlow(false)
 
@@ -226,11 +226,10 @@ open class Transformer(
 
     internal fun startDataPublishing(data: SendChannel<TransmissionEnvelope<Transmission.Data>>) {
         transformerScope.launch {
-            dataChannel.receiveAsFlow().collect {
+            dataChannel.receiveAsFlow().collect { envelope ->
                 data.send(
-                    TransmissionEnvelope(
-                        payload = it,
-                        source = _identity,
+                    envelope.copy(
+                        source = envelope.source ?: _identity,
                     )
                 )
             }

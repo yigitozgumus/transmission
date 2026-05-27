@@ -1,6 +1,7 @@
 package com.trendyol.transmission.transformer.dataholder
 
 import com.trendyol.transmission.Transmission
+import com.trendyol.transmission.router.TransmissionEnvelope
 import com.trendyol.transmission.transformer.Transformer
 import com.trendyol.transmission.transformer.request.Contract
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,7 +104,7 @@ internal class TransmissionDataHolderImpl<T : Transmission.Data?>(
                 storage.updateHolderData(initialValue, contract.key)
                 transformerScope.launch {
                     dataEmissionInitialized.collect {
-                        if (it && publishUpdates) communicationScope.send(initialValue)
+                        if (it && publishUpdates) publishDataHolderValue(initialValue)
                     }
                 }
             }
@@ -115,7 +116,17 @@ internal class TransmissionDataHolderImpl<T : Transmission.Data?>(
         val holderData = holder.value ?: return
         with(transformer) {
             storage.updateHolderData(holderData, contract.key)
-            if (publishUpdates) communicationScope.send(holder.value)
+            if (publishUpdates) publishDataHolderValue(holderData)
         }
+    }
+
+    private suspend fun publishDataHolderValue(data: Transmission.Data) {
+        transformer.dataChannel.send(
+            TransmissionEnvelope(
+                payload = data,
+                source = transformer.identity,
+                dataHolder = contract,
+            )
+        )
     }
 }

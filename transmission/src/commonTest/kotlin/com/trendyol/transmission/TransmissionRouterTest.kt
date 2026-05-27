@@ -12,6 +12,7 @@ import com.trendyol.transmission.transformer.TestTransformer3
 import com.trendyol.transmission.transformer.data.TestData
 import com.trendyol.transmission.transformer.data.TestEffect
 import com.trendyol.transmission.transformer.data.TestSignal
+import com.trendyol.transmission.transformer.dataholder.dataHolder
 import com.trendyol.transmission.transformer.extendEffectHandler
 import com.trendyol.transmission.transformer.extendSignalHandler
 import com.trendyol.transmission.transformer.handler.handlers
@@ -21,6 +22,7 @@ import com.trendyol.transmission.transformer.request.QueryHandler
 import com.trendyol.transmission.transformer.request.computation.ComputationDelegate
 import com.trendyol.transmission.transformer.request.computation.ComputationDelegateWithArgs
 import com.trendyol.transmission.router.loader.TransformerSetLoader
+import com.trendyol.transmission.router.streamData
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -288,6 +290,43 @@ class TransmissionRouterTest {
     }
 
     @Test
+    fun `GIVEN data holders with same data type WHEN observed by contract THEN streams are separated`() =
+        runTest {
+            turbineScope {
+                // Given
+                val firstContract = Contract.dataHolder<TestData>()
+                val secondContract = Contract.dataHolder<TestData>()
+                val transformer = Transformer(dispatcher = testDispatcher).apply {
+                    val firstHolder = dataHolder(TestData("first-initial"), firstContract)
+                    val secondHolder = dataHolder(TestData("second-initial"), secondContract)
+                    handlers {
+                        onSignal<UpdateHoldersSignal> {
+                            firstHolder.update { TestData("first-updated") }
+                            secondHolder.update { TestData("second-updated") }
+                        }
+                    }
+                }
+                sut = TransmissionRouter {
+                    addTransformerSet(setOf(transformer))
+                    addDispatcher(testDispatcher)
+                }
+                val firstStream = sut.streamData(firstContract).testIn(backgroundScope)
+                val secondStream = sut.streamData(secondContract).testIn(backgroundScope)
+
+                // When
+                sut.process(UpdateHoldersSignal)
+
+                // Then updates are separated by contract.
+                val firstItem = firstStream.awaitItem()
+                val secondItem = secondStream.awaitItem()
+                val firstUpdate = if (firstItem == TestData("first-initial")) firstStream.awaitItem() else firstItem
+                val secondUpdate = if (secondItem == TestData("second-initial")) secondStream.awaitItem() else secondItem
+                assertEquals(TestData("first-updated"), firstUpdate)
+                assertEquals(TestData("second-updated"), secondUpdate)
+            }
+        }
+
+    @Test
     fun `GIVEN cached computation with args WHEN called with different args THEN cache should be keyed by args`() =
         runTest {
             // Given
@@ -398,6 +437,8 @@ class TransmissionRouterTest {
     private interface ParentSignal : Transmission.Signal
 
     private object ChildSignal : ParentSignal
+
+    private object UpdateHoldersSignal : Transmission.Signal
 
     private fun unusedQueryHandler(): QueryHandler = object : QueryHandler {
         override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {

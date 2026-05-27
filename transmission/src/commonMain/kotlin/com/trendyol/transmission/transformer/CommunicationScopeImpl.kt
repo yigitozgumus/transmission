@@ -3,7 +3,7 @@ package com.trendyol.transmission.transformer
 import com.trendyol.transmission.ExperimentalTransmissionApi
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.effect.RouterEffectWithType
-import com.trendyol.transmission.effect.WrappedEffect
+import com.trendyol.transmission.router.TransmissionEnvelope
 import com.trendyol.transmission.transformer.handler.CommunicationScope
 import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.TransformerQueryDelegate
@@ -11,9 +11,10 @@ import kotlinx.coroutines.channels.Channel
 
 @OptIn(ExperimentalTransmissionApi::class)
 internal class CommunicationScopeImpl(
-    private val effectChannel: Channel<WrappedEffect>,
+    private val effectChannel: Channel<TransmissionEnvelope<Transmission.Effect>>,
     private val dataChannel: Channel<Transmission.Data>,
-    private val queryDelegate: TransformerQueryDelegate
+    private val queryDelegate: TransformerQueryDelegate,
+    private val sourceIdentity: Contract.Identity,
 ) : CommunicationScope {
 
     override suspend fun <D : Transmission.Data> send(data: D?) {
@@ -21,18 +22,34 @@ internal class CommunicationScopeImpl(
     }
 
     override suspend fun <D : Any> sendPayload(payload: D) {
-        effectChannel.send(WrappedEffect(RouterEffectWithType<D>(payload)))
+        effectChannel.send(
+            TransmissionEnvelope(
+                payload = RouterEffectWithType<D>(payload),
+                source = sourceIdentity,
+            )
+        )
     }
 
     override suspend fun <E : Transmission.Effect> send(
         effect: E,
         identity: Contract.Identity
     ) {
-        effectChannel.send(WrappedEffect(effect, identity))
+        effectChannel.send(
+            TransmissionEnvelope(
+                payload = effect,
+                source = sourceIdentity,
+                target = identity,
+            )
+        )
     }
 
     override suspend fun <E : Transmission.Effect> publish(effect: E) {
-        effectChannel.send(WrappedEffect(effect))
+        effectChannel.send(
+            TransmissionEnvelope(
+                payload = effect,
+                source = sourceIdentity,
+            )
+        )
     }
 
     override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {

@@ -4,8 +4,8 @@ import com.trendyol.transmission.ExperimentalTransmissionApi
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.effect.RouterEffect
 import com.trendyol.transmission.effect.RouterEffectWithType
-import com.trendyol.transmission.effect.WrappedEffect
 import com.trendyol.transmission.router.Capacity
+import com.trendyol.transmission.router.TransmissionEnvelope
 import com.trendyol.transmission.transformer.checkpoint.CheckpointTracker
 import com.trendyol.transmission.transformer.handler.CommunicationScope
 import com.trendyol.transmission.transformer.handler.HandlerRegistry
@@ -28,6 +28,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
@@ -96,8 +97,9 @@ open class Transformer(
     internal val transformerScope = CoroutineScope(dispatcher + SupervisorJob() + exceptionHandler)
 
     private val _identity: Contract.Identity = identity
+    internal val identity: Contract.Identity = _identity
 
-    private val effectChannel: Channel<WrappedEffect> = Channel(capacity = capacity.value)
+    private val effectChannel: Channel<TransmissionEnvelope<Transmission.Effect>> = Channel(capacity = capacity.value)
     internal val dataChannel: Channel<Transmission.Data> = Channel(capacity = capacity.value)
 
     internal val dataEmissionInitialized = MutableStateFlow(false)
@@ -199,7 +201,8 @@ open class Transformer(
         CommunicationScopeImpl(
             effectChannel = effectChannel,
             dataChannel = dataChannel,
-            queryDelegate = requestDelegate
+            queryDelegate = requestDelegate,
+            sourceIdentity = _identity,
         )
     }
 
@@ -207,41 +210,50 @@ open class Transformer(
         checkpointProvider = { tracker }
     }
 
-    internal fun startSignalCollection(incoming: SharedFlow<Transmission.Signal>) {
+    internal fun startSignalCollection(incoming: Flow<TransmissionEnvelope<Transmission.Signal>>) {
         transformerScope.launch {
-            incoming.collect {
+            incoming.collect { envelope ->
+                val signal = envelope.payload
                 currentSignalProcessing = transformerScope.launch {
-                    handlerRegistry.signalHandlerRegistry[it::class]?.execute(
+                    handlerRegistry.signalHandlerRegistry[signal::class]?.execute(
                         communicationScope,
-                        it
+                        signal
                     )
                 }
             }
         }
     }
 
-    internal fun startDataPublishing(data: SendChannel<Transmission.Data>) {
-        transformerScope.launch { dataChannel.receiveAsFlow().collect { data.send(it) } }
+    internal fun startDataPublishing(data: SendChannel<TransmissionEnvelope<Transmission.Data>>) {
+        transformerScope.launch {
+            dataChannel.receiveAsFlow().collect {
+                data.send(
+                    TransmissionEnvelope(
+                        payload = it,
+                        source = _identity,
+                    )
+                )
+            }
+        }
         dataEmissionInitialized.update { true }
     }
 
     internal fun startEffectProcessing(
-        producer: SendChannel<WrappedEffect>,
-        incoming: SharedFlow<WrappedEffect>
+        producer: SendChannel<TransmissionEnvelope<Transmission.Effect>>,
+        incoming: Flow<TransmissionEnvelope<Transmission.Effect>>
     ) {
         transformerScope.launch {
             supervisorScope {
                 launch {
                     incoming
-                        .filterNot { it.effect is RouterEffect }
-                        .filterNot { it.effect is RouterEffectWithType<*> }
-                        .filter { it.identity == null || it.identity == _identity }
-                        .map { it.effect }
-                        .collect {
+                        .filterNot { it.payload is RouterEffect }
+                        .filterNot { it.payload is RouterEffectWithType<*> }
+                        .map { it.payload }
+                        .collect { effect ->
                             currentEffectProcessing = launch {
-                                handlerRegistry.effectHandlerRegistry[it::class]?.execute(
+                                handlerRegistry.effectHandlerRegistry[effect::class]?.execute(
                                     communicationScope,
-                                    it
+                                    effect
                                 )
                             }
                         }

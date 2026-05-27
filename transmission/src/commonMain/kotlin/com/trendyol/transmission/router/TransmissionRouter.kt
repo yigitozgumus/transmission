@@ -1,7 +1,6 @@
 package com.trendyol.transmission.router
 
 import com.trendyol.transmission.Transmission
-import com.trendyol.transmission.effect.WrappedEffect
 import com.trendyol.transmission.router.builder.TransmissionRouterBuilderScope
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
@@ -17,11 +16,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -106,17 +102,16 @@ class TransmissionRouter internal constructor(
      */
     val initializationError: StateFlow<Throwable?> = _initializationError.asStateFlow()
 
-    private val signalBroadcast =
-        routerScope.createBroadcast<Transmission.Signal>(capacity = capacity)
-    private val dataBroadcast = routerScope.createBroadcast<Transmission.Data>(capacity = capacity)
-    private val effectBroadcast = routerScope.createBroadcast<WrappedEffect>(capacity = capacity)
+    private val transmissionBus = TransmissionBus(
+        scope = routerScope,
+        capacity = capacity,
+    )
 
     private val checkpointTracker = CheckpointTracker()
 
-    override val dataStream = dataBroadcast.output
+    override val dataStream = transmissionBus.dataPayloadStream
 
-    override val effectStream: SharedFlow<Transmission.Effect> = effectBroadcast.output
-        .map { it.effect }.shareIn(routerScope, SharingStarted.Lazily)
+    override val effectStream: SharedFlow<Transmission.Effect> = transmissionBus.effectPayloadStream
 
     private val _queryManager = QueryManager(
         queryScope = routerScope,
@@ -196,7 +191,7 @@ class TransmissionRouter internal constructor(
      */
     fun process(signal: Transmission.Signal) {
         routerScope.launch {
-            signalBroadcast.producer.send(signal)
+            transmissionBus.send(signal)
         }
     }
 
@@ -223,7 +218,7 @@ class TransmissionRouter internal constructor(
      */
     fun process(effect: Transmission.Effect) {
         routerScope.launch {
-            effectBroadcast.producer.send(WrappedEffect(effect))
+            transmissionBus.send(effect)
         }
     }
 
@@ -248,11 +243,11 @@ class TransmissionRouter internal constructor(
         transformerSet.forEach { transformer ->
             transformer.run {
                 bindCheckpointTracker(checkpointTracker)
-                startSignalCollection(incoming = signalBroadcast.output)
-                startDataPublishing(data = dataBroadcast.producer)
+                startSignalCollection(incoming = transmissionBus.signalStream)
+                startDataPublishing(data = transmissionBus.dataProducer)
                 startEffectProcessing(
-                    producer = effectBroadcast.producer,
-                    incoming = effectBroadcast.output,
+                    producer = transmissionBus.effectProducer,
+                    incoming = transmissionBus.effectsFor(identity = identity),
                 )
                 startQueryProcessing(
                     incomingQuery = _queryManager.incomingQueryResponse,

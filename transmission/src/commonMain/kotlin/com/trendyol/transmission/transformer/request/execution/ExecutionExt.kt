@@ -17,7 +17,11 @@ fun ExecutionScope.register(
     contract: Contract.Execution,
     execution: suspend QueryHandler.() -> Unit,
 ) {
-    this.executionRegistry.buildWith(contract.key, execution)
+    this.executionRegistry.buildWith(
+        key = contract.key,
+        debugName = contract.debugName,
+        execution = execution,
+    )
 }
 
 /**
@@ -33,5 +37,9 @@ fun <A : Any> ExecutionScope.register(
     contract: Contract.ExecutionWithArgs<A>,
     execution: suspend QueryHandler.(args: A) -> Unit,
 ) {
-    this.executionRegistry.buildWith(contract.key, execution)
+    this.executionRegistry.buildWith(
+        key = contract.key,
+        debugName = contract.debugName,
+        execution = execution,
+    )
 }

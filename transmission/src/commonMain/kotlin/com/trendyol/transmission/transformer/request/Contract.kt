@@ -3,7 +3,6 @@ package com.trendyol.transmission.transformer.request
 import com.trendyol.transmission.ExperimentalTransmissionApi
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.identifier.IdentifierGenerator
-import kotlin.jvm.JvmInline
 
 /**
  * Defines type-safe contracts for inter-transformer communication and resource identification.
@@ -41,7 +40,10 @@ sealed interface Contract {
      * }
      * ```
      */
-    class Identity internal constructor(internal val key: String) : Contract
+    class Identity internal constructor(
+        internal val key: String,
+        internal val debugName: String? = null,
+    ) : Contract
 
     /**
      * Contract for accessing data held by transformers through their data holders.
@@ -66,6 +68,7 @@ sealed interface Contract {
      */
     class DataHolder<T : Transmission.Data?> internal constructor(
         internal val key: String,
+        internal val debugName: String? = null,
     ) : Contract
 
     /**
@@ -96,7 +99,8 @@ sealed interface Contract {
      */
     class Computation<T : Any?> internal constructor(
         internal val key: String,
-        internal val useCache: Boolean = false
+        internal val useCache: Boolean = false,
+        internal val debugName: String? = null,
     ) : Contract
 
     /**
@@ -128,7 +132,8 @@ sealed interface Contract {
      */
     class ComputationWithArgs<A : Any, T : Any?> internal constructor(
         internal val key: String,
-        internal val useCache: Boolean = false
+        internal val useCache: Boolean = false,
+        internal val debugName: String? = null,
     ) : Contract
 
     /**
@@ -154,8 +159,10 @@ sealed interface Contract {
      * execute(clearCacheContract)
      * ```
      */
-    @JvmInline
-    value class Execution internal constructor(internal val key: String) : Contract
+    class Execution internal constructor(
+        internal val key: String,
+        internal val debugName: String? = null,
+    ) : Contract
 
     /**
      * Contract for triggering operations with arguments on remote transformers.
@@ -183,19 +190,23 @@ sealed interface Contract {
      * ```
      */
     class ExecutionWithArgs<A : Any> internal constructor(
-        internal val key: String
+        internal val key: String,
+        internal val debugName: String? = null,
     ) : Contract
 
     sealed class Checkpoint(
         internal open val key: String,
+        internal open val debugName: String? = null,
     ) : Contract {
         class Default internal constructor(
             override val key: String,
-        ) : Checkpoint(key)
+            override val debugName: String? = null,
+        ) : Checkpoint(key, debugName)
 
         class WithArgs<A : Any> internal constructor(
             override val key: String,
-        ) : Checkpoint(key)
+            override val debugName: String? = null,
+        ) : Checkpoint(key, debugName)
     }
 
     companion object {
@@ -217,8 +228,11 @@ sealed interface Contract {
          * class UserTransformer : Transformer(identity = userTransformerId)
          * ```
          */
-        fun identity(): Identity {
-            return Identity(key = IdentifierGenerator.generateIdentifier())
+        fun identity(debugName: String? = null): Identity {
+            return Identity(
+                key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
+            )
         }
 
         /**
@@ -237,8 +251,11 @@ sealed interface Contract {
          * }
          * ```
          */
-        fun <T : Transmission.Data?> dataHolder(): DataHolder<T> {
-            return DataHolder<T>(key = IdentifierGenerator.generateIdentifier())
+        fun <T : Transmission.Data?> dataHolder(debugName: String? = null): DataHolder<T> {
+            return DataHolder<T>(
+                key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
+            )
         }
 
         /**
@@ -259,11 +276,13 @@ sealed interface Contract {
          * ```
          */
         fun <A : Any?> computation(
-            useCache: Boolean = false
+            useCache: Boolean = false,
+            debugName: String? = null,
         ): Computation<A> {
             return Computation<A>(
                 key = IdentifierGenerator.generateIdentifier(),
-                useCache = useCache
+                useCache = useCache,
+                debugName = debugName,
             )
         }
 
@@ -286,11 +305,13 @@ sealed interface Contract {
          * ```
          */
         fun <A : Any, T : Any?> computationWithArgs(
-            useCache: Boolean = false
+            useCache: Boolean = false,
+            debugName: String? = null,
         ): ComputationWithArgs<A, T> {
             return ComputationWithArgs<A, T>(
                 key = IdentifierGenerator.generateIdentifier(),
-                useCache = useCache
+                useCache = useCache,
+                debugName = debugName,
             )
         }
 
@@ -309,8 +330,11 @@ sealed interface Contract {
          * }
          * ```
          */
-        fun execution(): Execution {
-            return Execution(key = IdentifierGenerator.generateIdentifier())
+        fun execution(debugName: String? = null): Execution {
+            return Execution(
+                key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
+            )
         }
 
         /**
@@ -329,8 +353,11 @@ sealed interface Contract {
          * }
          * ```
          */
-        fun <A : Any> executionWithArgs(): ExecutionWithArgs<A> {
-            return ExecutionWithArgs<A>(key = IdentifierGenerator.generateIdentifier())
+        fun <A : Any> executionWithArgs(debugName: String? = null): ExecutionWithArgs<A> {
+            return ExecutionWithArgs<A>(
+                key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
+            )
         }
 
         /**
@@ -351,9 +378,10 @@ sealed interface Contract {
          * ```
          */
         @ExperimentalTransmissionApi
-        fun checkpoint(): Checkpoint.Default {
+        fun checkpoint(debugName: String? = null): Checkpoint.Default {
             return Checkpoint.Default(
                 key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
             )
         }
 
@@ -375,9 +403,10 @@ sealed interface Contract {
          * ```
          */
         @ExperimentalTransmissionApi
-        fun <A : Any> checkpointWithArgs(): Checkpoint.WithArgs<A> {
+        fun <A : Any> checkpointWithArgs(debugName: String? = null): Checkpoint.WithArgs<A> {
             return Checkpoint.WithArgs(
                 key = IdentifierGenerator.generateIdentifier(),
+                debugName = debugName,
             )
         }
     }

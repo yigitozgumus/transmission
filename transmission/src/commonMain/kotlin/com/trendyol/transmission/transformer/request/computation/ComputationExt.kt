@@ -17,7 +17,12 @@ fun <T : Any?> ComputationScope.register(
     contract: Contract.Computation<T>,
     computation: suspend QueryHandler.() -> T,
 ) {
-    this.computationRegistry.buildWith(contract.key, contract.useCache, computation)
+    this.computationRegistry.buildWith(
+        key = contract.key,
+        useCache = contract.useCache,
+        debugName = contract.debugName,
+        computation = computation,
+    )
 }
 
 /**
@@ -32,5 +37,10 @@ fun <A : Any, T : Any?> ComputationScope.register(
     contract: Contract.ComputationWithArgs<A,T>,
     computation: suspend QueryHandler.(args: A) -> T,
 ) {
-    this.computationRegistry.buildWith(contract.key, contract.useCache, computation)
+    this.computationRegistry.buildWith(
+        key = contract.key,
+        useCache = contract.useCache,
+        debugName = contract.debugName,
+        computation = computation,
+    )
 }

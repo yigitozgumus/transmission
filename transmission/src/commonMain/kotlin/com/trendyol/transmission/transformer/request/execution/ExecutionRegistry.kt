@@ -11,20 +11,24 @@ class ExecutionRegistry internal constructor(private val transformer: Transforme
 
     internal fun buildWith(
         key: String,
+        debugName: String? = null,
         execution: suspend QueryHandler.() -> Unit
     ) {
         transformer.storage.registerExecution(
             key = key,
+            debugName = debugName,
             delegate = ExecutionDelegate(execution)
         )
     }
 
     internal fun <A : Any> buildWith(
         key: String,
+        debugName: String? = null,
         execution: suspend QueryHandler.(args: A) -> Unit
     ) {
         transformer.storage.registerExecution(
             key = key,
+            debugName = debugName,
             delegate = ExecutionDelegateWithArgs(execution)
         )
     }

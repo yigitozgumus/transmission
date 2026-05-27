@@ -34,12 +34,12 @@ internal class TransformerStorage {
         holderDataReference[key] = data
     }
 
-    fun updateHolderDataReferenceToTrack(dataHolderToTrack: String) {
+    fun updateHolderDataReferenceToTrack(dataHolderToTrack: String, debugName: String? = null) {
         internalTransmissionHolderSet = when (internalTransmissionHolderSet) {
             is HolderState.Initialized -> {
                 val currentSet = (internalTransmissionHolderSet as HolderState.Initialized).valueSet
                 require(!currentSet.contains(dataHolderToTrack)) {
-                    "Multiple data holders with the same key is not allowed: $dataHolderToTrack"
+                    "Multiple data holders with the same key is not allowed: ${displayName(dataHolderToTrack, debugName)}"
                 }
                 HolderState.Initialized(currentSet + dataHolderToTrack)
             }
@@ -50,16 +50,16 @@ internal class TransformerStorage {
         }
     }
 
-    fun registerComputation(key: String, delegate: ComputationOwner) {
+    fun registerComputation(key: String, debugName: String? = null, delegate: ComputationOwner) {
         require(!computationMap.containsKey(key)) {
-            "Multiple computations with the same key is not allowed: $key"
+            "Multiple computations with the same key is not allowed: ${displayName(key, debugName)}"
         }
         computationMap[key] = delegate
     }
 
-    fun registerExecution(key: String, delegate: ExecutionOwner) {
+    fun registerExecution(key: String, debugName: String? = null, delegate: ExecutionOwner) {
         require(!executionMap.containsKey(key)) {
-            "Multiple executions with the same key is not allowed: $key"
+            "Multiple executions with the same key is not allowed: ${displayName(key, debugName)}"
         }
         executionMap[key] = delegate
     }
@@ -90,6 +90,10 @@ internal class TransformerStorage {
 
     fun getHolderDataByKey(key: String): Transmission.Data? {
         return holderDataReference[key]
+    }
+
+    private fun displayName(key: String, debugName: String?): String {
+        return debugName?.let { "$it ($key)" } ?: key
     }
 
     fun clear() {

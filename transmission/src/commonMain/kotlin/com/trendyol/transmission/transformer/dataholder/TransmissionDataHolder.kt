@@ -98,7 +98,7 @@ internal class TransmissionDataHolderImpl<T : Transmission.Data?>(
 
     init {
         transformer.run {
-            storage.updateHolderDataReferenceToTrack(contract.key)
+            storage.updateHolderDataReferenceToTrack(contract.key, contract.debugName)
             if (initialValue != null) {
                 storage.updateHolderData(initialValue, contract.key)
                 transformerScope.launch {

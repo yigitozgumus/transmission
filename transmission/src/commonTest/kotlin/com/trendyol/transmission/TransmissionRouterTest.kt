@@ -14,6 +14,8 @@ import com.trendyol.transmission.transformer.data.TestEffect
 import com.trendyol.transmission.transformer.data.TestSignal
 import com.trendyol.transmission.transformer.extendEffectHandler
 import com.trendyol.transmission.transformer.extendSignalHandler
+import com.trendyol.transmission.transformer.handler.handlers
+import com.trendyol.transmission.transformer.handler.onSignal
 import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.QueryHandler
 import com.trendyol.transmission.transformer.request.computation.ComputationDelegateWithArgs
@@ -264,6 +266,27 @@ class TransmissionRouterTest {
     }
 
     @Test
+    fun `GIVEN parent signal handler WHEN child signal is processed THEN handler should not run`() {
+        // Given
+        var handledSignals = 0
+        val transformer = Transformer(dispatcher = testDispatcher).apply {
+            handlers {
+                onSignal<ParentSignal> { handledSignals++ }
+            }
+        }
+        sut = TransmissionRouter {
+            addTransformerSet(setOf(transformer))
+            addDispatcher(testDispatcher)
+        }
+
+        // When
+        sut.process(ChildSignal)
+
+        // Then
+        assertEquals(0, handledSignals)
+    }
+
+    @Test
     fun `GIVEN cached computation with args WHEN called with different args THEN cache should be keyed by args`() =
         runTest {
             // Given
@@ -305,6 +328,10 @@ class TransmissionRouterTest {
             assertEquals("a-1", first)
             assertEquals("a-2", second)
         }
+
+    private interface ParentSignal : Transmission.Signal
+
+    private object ChildSignal : ParentSignal
 
     private fun unusedQueryHandler(): QueryHandler = object : QueryHandler {
         override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {

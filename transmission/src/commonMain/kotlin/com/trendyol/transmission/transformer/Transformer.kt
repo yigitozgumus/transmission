@@ -215,9 +215,9 @@ open class Transformer(
             incoming.collect { envelope ->
                 val signal = envelope.payload
                 currentSignalProcessing = transformerScope.launch {
-                    handlerRegistry.signalHandlerRegistry[signal::class]?.execute(
+                    handlerRegistry.dispatchSignal(
                         communicationScope,
-                        signal
+                        signal,
                     )
                 }
             }
@@ -251,9 +251,9 @@ open class Transformer(
                         .map { it.payload }
                         .collect { effect ->
                             currentEffectProcessing = launch {
-                                handlerRegistry.effectHandlerRegistry[effect::class]?.execute(
+                                handlerRegistry.dispatchEffect(
                                     communicationScope,
-                                    effect
+                                    effect,
                                 )
                             }
                         }

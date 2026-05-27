@@ -37,7 +37,7 @@ class HandlerRegistry internal constructor() {
     ) {
         signalHandlerRegistry[T::class] =
             signalHandlerRegistry[T::class]?.also { it.addOperation(lambda as SignalLambda) }
-                ?: StackedLambda()
+                ?: StackedLambda<Transmission.Signal>().also { it.addOperation(lambda as SignalLambda) }
     }
 
     @PublishedApi
@@ -54,6 +54,6 @@ class HandlerRegistry internal constructor() {
     ) {
         effectHandlerRegistry[T::class] =
             effectHandlerRegistry[T::class]?.also { it.addOperation(lambda as EffectLambda) }
-                ?: StackedLambda()
+                ?: StackedLambda<Transmission.Effect>().also { it.addOperation(lambda as EffectLambda) }
     }
 }

@@ -11,7 +11,7 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
 ) {
 
     internal var dispatcher: CoroutineDispatcher = Dispatchers.Default
-    internal lateinit var transformerSetLoader: TransformerSetLoader
+    internal var transformerSetLoader: TransformerSetLoader? = null
     internal var autoInitialization: Boolean = true
     internal var capacity: Capacity = Capacity.Default
 
@@ -22,6 +22,9 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
         }
 
         override fun addTransformerSet(transformerSet: Set<Transformer>) {
+            check(transformerSet.isNotEmpty()) {
+                "transformerSet should not be empty"
+            }
             val loader = object : TransformerSetLoader {
                 override suspend fun load(): Set<Transformer> {
                     return transformerSet

@@ -44,8 +44,13 @@ fun TransmissionRouter(
     val builder = TransmissionRouterBuilderScopeImpl(scope)
     return TransmissionRouter(
         identity = identity,
-        transformerSetLoader =
-            builder.transformerSetLoader.takeIf { builder.autoInitialization },
+        transformerSetLoader = if (builder.autoInitialization) {
+            builder.transformerSetLoader ?: throw IllegalStateException(
+                "transformerSet should not be empty"
+            )
+        } else {
+            null
+        },
         autoInitialization = builder.autoInitialization,
         capacity = builder.capacity,
         dispatcher = builder.dispatcher,

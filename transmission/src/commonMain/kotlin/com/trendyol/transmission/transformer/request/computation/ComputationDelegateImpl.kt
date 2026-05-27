@@ -28,15 +28,20 @@ internal class ComputationDelegateWithArgs<A : Any>(
     private val computation: suspend QueryHandler.(args: A) -> Any?,
 ) : ComputationOwner.WithArgs<A> {
 
-    private var result: Any? = null
+    private val results: MutableMap<A, Any?> = mutableMapOf()
     private val lock = Mutex()
 
     override suspend fun getResult(scope: QueryHandler, invalidate: Boolean, args: A): Any? {
-        return if (useCache && invalidate.not()) {
-            result ?: lock.withLock { computation(scope, args) }.also { result = it }
-        } else {
-            result = null
-            lock.withLock { computation(scope, args) }
+        return lock.withLock {
+            when {
+                useCache.not() -> computation(scope, args)
+                invalidate -> {
+                    results.remove(args)
+                    computation(scope, args)
+                }
+                results.containsKey(args) -> results[args]
+                else -> computation(scope, args).also { results[args] = it }
+            }
         }
     }
 }

@@ -93,6 +93,9 @@ internal class TransformerStorage {
     }
 
     fun clear() {
+        holderDataReference.clear()
+        internalTransmissionHolderSet = HolderState.Undefined
         computationMap.clear()
+        executionMap.clear()
     }
 }

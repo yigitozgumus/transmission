@@ -5,16 +5,24 @@ import com.trendyol.transmission.effect.RouterEffect
 import com.trendyol.transmission.router.TransmissionRouter
 import com.trendyol.transmission.router.builder.TransmissionRouter
 import com.trendyol.transmission.transformer.FakeTransformer
+import com.trendyol.transmission.transformer.Transformer
 import com.trendyol.transmission.transformer.TestTransformer1
 import com.trendyol.transmission.transformer.TestTransformer2
 import com.trendyol.transmission.transformer.TestTransformer3
 import com.trendyol.transmission.transformer.data.TestData
 import com.trendyol.transmission.transformer.data.TestEffect
 import com.trendyol.transmission.transformer.data.TestSignal
+import com.trendyol.transmission.transformer.extendEffectHandler
+import com.trendyol.transmission.transformer.extendSignalHandler
+import com.trendyol.transmission.transformer.request.Contract
+import com.trendyol.transmission.transformer.request.QueryHandler
+import com.trendyol.transmission.transformer.request.computation.ComputationDelegateWithArgs
+import com.trendyol.transmission.router.loader.TransformerSetLoader
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -27,18 +35,30 @@ class TransmissionRouterTest {
     @Test
     fun `GIVEN Router with no transformers WHEN initialize is called THEN router should throw IllegalStateException`() =
         runTest {
-            // Given
-            try {
-                // When
+            // When
+            val error = assertFailsWith<IllegalStateException> {
                 sut = TransmissionRouter {
                     addTransformerSet(setOf())
                     addDispatcher(testDispatcher)
                 }
-            } catch (e: IllegalStateException) {
-                // Then
-                assertEquals(e.message, "transformerSet should not be empty")
+            }
+
+            // Then
+            assertEquals("transformerSet should not be empty", error.message)
+        }
+
+    @Test
+    fun `GIVEN Router with no loader WHEN initialize is called THEN router should throw IllegalStateException`() {
+        // When
+        val error = assertFailsWith<IllegalStateException> {
+            sut = TransmissionRouter {
+                addDispatcher(testDispatcher)
             }
         }
+
+        // Then
+        assertEquals("transformerSet should not be empty", error.message)
+    }
 
     @Test
     fun `GIVEN Router with one transformer WHEN initialize is called THEN router should not throw IllegalStateException`() =
@@ -175,5 +195,121 @@ class TransmissionRouterTest {
         assertEquals(transformer1.effectList.contains(RouterEffect("")), false)
         assertEquals(transformer2.effectList.contains(RouterEffect("")), false)
         assertEquals(transformer3.effectList.contains(RouterEffect("")), false)
+    }
+
+    @Test
+    fun `GIVEN Router with manual initialization WHEN created without loader THEN it should initialize later`() {
+        // Given
+        val transformer = FakeTransformer(testDispatcher)
+        sut = TransmissionRouter {
+            overrideInitialization()
+            addDispatcher(testDispatcher)
+        }
+
+        // When
+        sut.initialize(object : TransformerSetLoader {
+            override suspend fun load(): Set<Transformer> = setOf(transformer)
+        })
+        sut.process(TestSignal)
+
+        // Then
+        assertEquals(TestSignal, transformer.signalList.last())
+    }
+
+    @Test
+    fun `GIVEN missing handlers WHEN extend handlers are added THEN they should handle transmissions`() {
+        // Given
+        val signals = mutableListOf<Transmission.Signal>()
+        val effects = mutableListOf<Transmission.Effect>()
+        val transformer = Transformer(dispatcher = testDispatcher)
+            .extendSignalHandler<TestSignal> { signal -> signals.add(signal) }
+            .extendEffectHandler<TestEffect> { effect -> effects.add(effect) }
+        sut = TransmissionRouter {
+            addTransformerSet(setOf(transformer))
+            addDispatcher(testDispatcher)
+        }
+
+        // When
+        sut.process(TestSignal)
+        sut.process(TestEffect)
+
+        // Then
+        assertEquals(listOf<Transmission.Signal>(TestSignal), signals)
+        assertEquals(listOf<Transmission.Effect>(TestEffect), effects)
+    }
+
+    @Test
+    fun `GIVEN cached computation with args WHEN called with different args THEN cache should be keyed by args`() =
+        runTest {
+            // Given
+            val calls = mutableListOf<String>()
+            val computation = ComputationDelegateWithArgs<String>(useCache = true) { args ->
+                calls.add(args)
+                "$args-${calls.size}"
+            }
+            val queryHandler = unusedQueryHandler()
+
+            // When
+            val firstA = computation.getResult(queryHandler, invalidate = false, args = "a")
+            val firstB = computation.getResult(queryHandler, invalidate = false, args = "b")
+            val secondA = computation.getResult(queryHandler, invalidate = false, args = "a")
+
+            // Then
+            assertEquals("a-1", firstA)
+            assertEquals("b-2", firstB)
+            assertEquals("a-1", secondA)
+            assertEquals(listOf("a", "b"), calls)
+        }
+
+    @Test
+    fun `GIVEN computation with args without cache WHEN called repeatedly THEN it should recompute`() =
+        runTest {
+            // Given
+            var callCount = 0
+            val computation = ComputationDelegateWithArgs<String>(useCache = false) { args ->
+                callCount++
+                "$args-$callCount"
+            }
+            val queryHandler = unusedQueryHandler()
+
+            // When
+            val first = computation.getResult(queryHandler, invalidate = false, args = "a")
+            val second = computation.getResult(queryHandler, invalidate = false, args = "a")
+
+            // Then
+            assertEquals("a-1", first)
+            assertEquals("a-2", second)
+        }
+
+    private fun unusedQueryHandler(): QueryHandler = object : QueryHandler {
+        override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {
+            error("unused")
+        }
+
+        override suspend fun <D : Any?> compute(
+            contract: Contract.Computation<D>,
+            invalidate: Boolean
+        ): D {
+            error("unused")
+        }
+
+        override suspend fun <A : Any, D : Any?> compute(
+            contract: Contract.ComputationWithArgs<A, D>,
+            args: A,
+            invalidate: Boolean
+        ): D {
+            error("unused")
+        }
+
+        override suspend fun execute(contract: Contract.Execution) {
+            error("unused")
+        }
+
+        override suspend fun <A : Any> execute(
+            contract: Contract.ExecutionWithArgs<A>,
+            args: A
+        ) {
+            error("unused")
+        }
     }
 }

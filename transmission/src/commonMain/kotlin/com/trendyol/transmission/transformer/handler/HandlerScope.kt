@@ -52,6 +52,11 @@ class Handlers internal constructor()
  * @see HandlerScope for available handler registration methods
  * @see CommunicationScope for available communication methods within handlers
  */
+@Deprecated(
+    message = "Use Transformer.configure { ... } instead. If you need explicit replacement inside configure, use replaceHandlers { ... }.",
+    replaceWith = ReplaceWith("configure { replaceHandlers(scope) }", "com.trendyol.transmission.transformer.configure"),
+    level = DeprecationLevel.WARNING
+)
 fun Transformer.handlers(scope: HandlerScope.() -> Unit = {}): Handlers {
     this.handlerRegistry.clear()
     HandlerScope(handlerRegistry).apply(scope)
@@ -71,7 +76,9 @@ fun Transformer.handlers(scope: HandlerScope.() -> Unit = {}): Handlers {
     level = DeprecationLevel.WARNING
 )
 fun Transformer.createHandlers(scope: HandlerScope.() -> Unit = {}): Handlers {
-    return handlers(scope)
+    this.handlerRegistry.clear()
+    HandlerScope(handlerRegistry).apply(scope)
+    return Handlers()
 }
 
 /**

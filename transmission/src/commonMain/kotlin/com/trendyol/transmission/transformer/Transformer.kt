@@ -116,6 +116,9 @@ open class Transformer(
 
     internal val storage = TransformerStorage()
 
+    private val configuredOnErrorCallbacks = mutableListOf<(Throwable) -> Unit>()
+    private val configuredOnClearedCallbacks = mutableListOf<() -> Unit>()
+
     internal val handlerRegistry by lazy { HandlerRegistry() }
     internal val executionRegistry: ExecutionRegistry by lazy { ExecutionRegistry(this) }
     internal val computationRegistry: ComputationRegistry by lazy {
@@ -307,7 +310,15 @@ open class Transformer(
      * }
      * ```
      */
-    open fun onCleared() {}
+    open fun onCleared() {
+        configuredOnClearedCallbacks.forEach { callback ->
+            callback()
+        }
+    }
+
+    internal fun registerConfiguredOnCleared(callback: () -> Unit) {
+        configuredOnClearedCallbacks.add(callback)
+    }
 
     /**
      * Clears this transformer by calling [onCleared], cancelling its coroutine scope, and clearing storage.
@@ -351,6 +362,12 @@ open class Transformer(
      * ```
      */
     open fun onError(throwable: Throwable) {
-        // no-operation
+        configuredOnErrorCallbacks.forEach { callback ->
+            callback(throwable)
+        }
+    }
+
+    internal fun registerConfiguredOnError(callback: (Throwable) -> Unit) {
+        configuredOnErrorCallbacks.add(callback)
     }
 }

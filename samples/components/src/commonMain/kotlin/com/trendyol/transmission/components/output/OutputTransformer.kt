@@ -11,20 +11,10 @@ import com.trendyol.transmission.components.input.InputTransformer
 import com.trendyol.transmission.components.util.Logger
 import com.trendyol.transmission.effect.RouterEffect
 import com.trendyol.transmission.transformer.Transformer
-import com.trendyol.transmission.transformer.addComputations
-import com.trendyol.transmission.transformer.addExecutions
-import com.trendyol.transmission.transformer.addHandlers
+import com.trendyol.transmission.transformer.TransformerConfigurationScope
+import com.trendyol.transmission.transformer.configure
 import com.trendyol.transmission.transformer.dataholder.dataHolder
-import com.trendyol.transmission.transformer.handler.Handlers
-import com.trendyol.transmission.transformer.handler.handlers
-import com.trendyol.transmission.transformer.handler.onEffect
 import com.trendyol.transmission.transformer.request.Contract
-import com.trendyol.transmission.transformer.request.computation.Computations
-import com.trendyol.transmission.transformer.request.computation.computations
-import com.trendyol.transmission.transformer.request.computation.register
-import com.trendyol.transmission.transformer.request.execution.Executions
-import com.trendyol.transmission.transformer.request.execution.executions
-import com.trendyol.transmission.transformer.request.execution.register
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlin.random.Random
@@ -38,8 +28,17 @@ class OutputTransformer(
 
     private val holder2 = dataHolder(ColorPickerUiState(), publishUpdates = false)
 
-    override val computations: Computations = computations {
-        register(outputCalculationContract) {
+    init {
+        configure {
+            registerComputations()
+            registerExecutions()
+            registerHandlers()
+            registerLifecycleCallbacks()
+        }
+    }
+
+    private fun TransformerConfigurationScope.registerComputations() {
+        computation(outputCalculationContract) {
             delay(2.seconds)
             val data = getData(ColorPickerTransformer.holderContract)?.selectedColorIndex
             val writtenOutput = compute(InputTransformer.writtenInputContract)
@@ -48,8 +47,8 @@ class OutputTransformer(
         }
     }
 
-    override val executions: Executions = executions {
-        register(outputExecutionContract) {
+    private fun TransformerConfigurationScope.registerExecutions() {
+        execution(outputExecutionContract) {
             delay(4.seconds)
             communicationScope.publish(
                 ColorPickerEffect.BackgroundColorUpdate(
@@ -65,7 +64,7 @@ class OutputTransformer(
         }
     }
 
-    override val handlers: Handlers = handlers {
+    private fun TransformerConfigurationScope.registerHandlers() {
         onEffect<InputEffect.InputUpdate> { effect ->
             holder.update { it.copy(outputText = effect.value) }
             delay(3.seconds)
@@ -87,9 +86,10 @@ class OutputTransformer(
         }
     }
 
-    override fun onError(throwable: Throwable) {
-        super.onError(throwable)
-        Logger.d(TAG, "onError: ${throwable.message}")
+    private fun TransformerConfigurationScope.registerLifecycleCallbacks() {
+        onError { throwable ->
+            Logger.d(TAG, "onError: ${throwable.message}")
+        }
     }
 
     companion object {

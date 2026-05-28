@@ -5,16 +5,13 @@ import com.trendyol.transmission.InternalTransmissionApi
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.identifier.IdentifierGenerator
 import com.trendyol.transmission.router.Capacity
-import com.trendyol.transmission.router.createBroadcast
 import com.trendyol.transmission.transformer.checkpoint.CheckpointHandler
 import com.trendyol.transmission.transformer.checkpoint.CheckpointTracker
 import com.trendyol.transmission.transformer.checkpoint.CheckpointValidator
 import com.trendyol.transmission.transformer.handler.CommunicationScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,7 +26,37 @@ internal class TransformerQueryDelegate(
     scope: CoroutineScope,
 ) {
     val outGoingQuery: Channel<QueryType> = Channel(capacity = capacity.value)
-    val resultBroadcast = scope.createBroadcast<QueryResult>(capacity = capacity)
+    private val pendingQueries = mutableMapOf<String, CompletableDeferred<QueryResult>>()
+    private val pendingQueriesLock = Mutex()
+
+    suspend fun receiveQueryResult(result: QueryResult) {
+        val queryIdentifier = when (result) {
+            is QueryResult.Computation<*> -> result.resultIdentifier
+            is QueryResult.Data<*> -> result.resultIdentifier
+        }
+        val pendingQuery = pendingQueriesLock.withLock {
+            pendingQueries[queryIdentifier]
+        }
+        pendingQuery?.complete(result)
+    }
+
+    private suspend fun awaitQueryResult(
+        queryIdentifier: String,
+        sendQuery: suspend () -> Unit,
+    ): QueryResult {
+        val result = CompletableDeferred<QueryResult>()
+        pendingQueriesLock.withLock {
+            pendingQueries[queryIdentifier] = result
+        }
+        try {
+            sendQuery()
+            return result.await()
+        } finally {
+            pendingQueriesLock.withLock {
+                pendingQueries.remove(queryIdentifier)
+            }
+        }
+    }
 
     val checkpointHandler: CheckpointHandler by lazy {
         object : CheckpointHandler {
@@ -146,51 +173,51 @@ internal class TransformerQueryDelegate(
 
         override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            outGoingQuery.send(
-                QueryType.Data(
-                    sender = identity.key,
-                    contract = contract,
-                    queryIdentifier = queryIdentifier
+            val result = awaitQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.Data(
+                        sender = identity.key,
+                        contract = contract,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return resultBroadcast.output.filterIsInstance<QueryResult.Data<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            } as QueryResult.Data<D>
+            return result.data
         }
 
         override suspend fun <D : Any?> compute(
             contract: Contract.Computation<D>, invalidate: Boolean
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            outGoingQuery.send(
-                QueryType.Computation(
-                    sender = identity.key,
-                    contract = contract,
-                    invalidate = invalidate,
-                    queryIdentifier = queryIdentifier
+            val result = awaitQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.Computation(
+                        sender = identity.key,
+                        contract = contract,
+                        invalidate = invalidate,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return resultBroadcast.output.filterIsInstance<QueryResult.Computation<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            } as QueryResult.Computation<D>
+            return result.data
         }
 
         override suspend fun <A : Any, D : Any?> compute(
             contract: Contract.ComputationWithArgs<A, D>, args: A, invalidate: Boolean
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            outGoingQuery.send(
-                QueryType.ComputationWithArgs(
-                    sender = identity.key,
-                    contract = contract,
-                    args = args,
-                    invalidate = invalidate,
-                    queryIdentifier = queryIdentifier
+            val result = awaitQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.ComputationWithArgs(
+                        sender = identity.key,
+                        contract = contract,
+                        args = args,
+                        invalidate = invalidate,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return resultBroadcast.output.filterIsInstance<QueryResult.Computation<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            } as QueryResult.Computation<D>
+            return result.data
         }
 
         override suspend fun execute(contract: Contract.Execution) {

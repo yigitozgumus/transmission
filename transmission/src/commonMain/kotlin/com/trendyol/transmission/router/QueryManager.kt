@@ -6,18 +6,17 @@ import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.QueryHandler
 import com.trendyol.transmission.transformer.request.QueryResult
 import com.trendyol.transmission.transformer.request.QueryType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal class QueryManager(
     private val queryScope: CoroutineScope,
@@ -25,7 +24,8 @@ internal class QueryManager(
     private val capacity: Capacity = Capacity.Default,
 ) {
 
-    private val routerQueryResultChannel: MutableSharedFlow<QueryResult> = MutableSharedFlow()
+    private val pendingRouterQueries = mutableMapOf<String, CompletableDeferred<QueryResult>>()
+    private val pendingRouterQueriesLock = Mutex()
 
     val outGoingQuery: Channel<QueryType> = Channel(capacity = capacity.value)
     private val queryResultChannel: Channel<QueryResult> = Channel(capacity = capacity.value)
@@ -39,24 +39,49 @@ internal class QueryManager(
         }
     }
 
+    private suspend fun awaitRouterQueryResult(
+        queryIdentifier: String,
+        sendQuery: suspend () -> Unit,
+    ): QueryResult {
+        val result = CompletableDeferred<QueryResult>()
+        pendingRouterQueriesLock.withLock {
+            pendingRouterQueries[queryIdentifier] = result
+        }
+        try {
+            sendQuery()
+            return result.await()
+        } finally {
+            pendingRouterQueriesLock.withLock {
+                pendingRouterQueries.remove(queryIdentifier)
+            }
+        }
+    }
+
+    private suspend fun completeRouterQuery(result: QueryResult) {
+        val queryIdentifier = when (result) {
+            is QueryResult.Computation<*> -> result.resultIdentifier
+            is QueryResult.Data<*> -> result.resultIdentifier
+        }
+        val pendingQuery = pendingRouterQueriesLock.withLock {
+            pendingRouterQueries[queryIdentifier]
+        }
+        pendingQuery?.complete(result)
+    }
+
     val handler = object : QueryHandler {
 
         override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            val result = queryScope.async {
-                routerQueryResultChannel
-                    .filterIsInstance<QueryResult.Data<D>>()
-                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                    .first().data
-            }
-            outGoingQuery.send(
-                QueryType.Data(
-                    sender = routerRef.routerName,
-                    contract = contract,
-                    queryIdentifier = queryIdentifier
+            val result = awaitRouterQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.Data(
+                        sender = routerRef.routerName,
+                        contract = contract,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return result.await()
+            } as QueryResult.Data<D>
+            return result.data
         }
 
         override suspend fun <D : Any?> compute(
@@ -64,21 +89,17 @@ internal class QueryManager(
             invalidate: Boolean,
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            val result = queryScope.async {
-                routerQueryResultChannel
-                    .filterIsInstance<QueryResult.Computation<D>>()
-                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                    .first().data
-            }
-            outGoingQuery.send(
-                QueryType.Computation(
-                    sender = routerRef.routerName,
-                    contract = contract,
-                    invalidate = invalidate,
-                    queryIdentifier = queryIdentifier
+            val result = awaitRouterQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.Computation(
+                        sender = routerRef.routerName,
+                        contract = contract,
+                        invalidate = invalidate,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return result.await()
+            } as QueryResult.Computation<D>
+            return result.data
         }
 
         override suspend fun <A : Any, D : Any?> compute(
@@ -87,22 +108,18 @@ internal class QueryManager(
             invalidate: Boolean,
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
-            val result = queryScope.async {
-                routerQueryResultChannel
-                    .filterIsInstance<QueryResult.Computation<D>>()
-                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                    .first().data
-            }
-            outGoingQuery.send(
-                QueryType.ComputationWithArgs(
-                    sender = routerRef.routerName,
-                    contract = contract,
-                    args = args,
-                    invalidate = invalidate,
-                    queryIdentifier = queryIdentifier
+            val result = awaitRouterQueryResult(queryIdentifier) {
+                outGoingQuery.send(
+                    QueryType.ComputationWithArgs(
+                        sender = routerRef.routerName,
+                        contract = contract,
+                        args = args,
+                        invalidate = invalidate,
+                        queryIdentifier = queryIdentifier
+                    )
                 )
-            )
-            return result.await()
+            } as QueryResult.Computation<D>
+            return result.data
         }
 
         override suspend fun execute(contract: Contract.Execution) {
@@ -132,7 +149,7 @@ internal class QueryManager(
 
     internal fun receiveGlobalQueryResult(result: QueryResult) {
         queryScope.launch {
-            routerQueryResultChannel.emit(result)
+            completeRouterQuery(result)
         }
     }
 
@@ -148,7 +165,7 @@ internal class QueryManager(
 
     private suspend fun sendQueryResult(result: QueryResult) {
         if (result.owner == routerRef.routerName) {
-            routerQueryResultChannel.emit(result)
+            completeRouterQuery(result)
         } else if (!GlobalTransmissionRouter.routeQueryResult(result)) {
             queryResultChannel.send(result)
         }

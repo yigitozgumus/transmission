@@ -6,6 +6,11 @@ class ComputationScope internal constructor(internal val computationRegistry: Co
 
 class Computations internal constructor()
 
+@Deprecated(
+    message = "Use Transformer.configure { ... } instead. If you need explicit replacement inside configure, use replaceComputations { ... }.",
+    replaceWith = ReplaceWith("configure { replaceComputations(scope) }", "com.trendyol.transmission.transformer.configure"),
+    level = DeprecationLevel.WARNING
+)
 fun Transformer.computations(scope: ComputationScope.() -> Unit = {}): Computations {
     this.computationRegistry.clear()
     ComputationScope(computationRegistry).apply(scope)
@@ -25,7 +30,9 @@ fun Transformer.computations(scope: ComputationScope.() -> Unit = {}): Computati
     level = DeprecationLevel.WARNING
 )
 fun Transformer.createComputations(scope: ComputationScope.() -> Unit = {}): Computations {
-    return computations(scope)
+    this.computationRegistry.clear()
+    ComputationScope(computationRegistry).apply(scope)
+    return Computations()
 }
 
 fun Computations.extendComputations(

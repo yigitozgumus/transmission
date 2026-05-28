@@ -6,6 +6,11 @@ class ExecutionScope internal constructor(internal val executionRegistry: Execut
 
 class Executions internal constructor()
 
+@Deprecated(
+    message = "Use Transformer.configure { ... } instead. If you need explicit replacement inside configure, use replaceExecutions { ... }.",
+    replaceWith = ReplaceWith("configure { replaceExecutions(scope) }", "com.trendyol.transmission.transformer.configure"),
+    level = DeprecationLevel.WARNING
+)
 fun Transformer.executions(scope: ExecutionScope.() -> Unit = {}): Executions {
     this.executionRegistry.clear()
     ExecutionScope(executionRegistry).apply(scope)
@@ -25,7 +30,9 @@ fun Transformer.executions(scope: ExecutionScope.() -> Unit = {}): Executions {
     level = DeprecationLevel.WARNING
 )
 fun Transformer.createExecutions(scope: ExecutionScope.() -> Unit = {}): Executions {
-    return executions(scope)
+    this.executionRegistry.clear()
+    ExecutionScope(executionRegistry).apply(scope)
+    return Executions()
 }
 
 fun Executions.extendExecutions(

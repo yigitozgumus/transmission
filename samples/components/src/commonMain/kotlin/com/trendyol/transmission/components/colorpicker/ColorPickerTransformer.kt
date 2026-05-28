@@ -3,10 +3,8 @@ package com.trendyol.transmission.components.colorpicker
 import com.trendyol.transmission.components.ColorPickerUiState
 import com.trendyol.transmission.components.multioutput.multiOutputTransformerIdentity
 import com.trendyol.transmission.transformer.Transformer
-import com.trendyol.transmission.transformer.addHandlers
+import com.trendyol.transmission.transformer.configure
 import com.trendyol.transmission.transformer.dataholder.dataHolder
-import com.trendyol.transmission.transformer.handler.onEffect
-import com.trendyol.transmission.transformer.handler.onSignal
 import com.trendyol.transmission.transformer.request.Contract
 import kotlinx.coroutines.CoroutineDispatcher
 
@@ -19,7 +17,7 @@ class ColorPickerTransformer(
     private val holder = dataHolder(ColorPickerUiState(), holderContract)
 
     init {
-        addHandlers {
+        configure {
             onSignal<ColorPickerSignal.SelectColor> { signal ->
                 holder.update { it?.copy(selectedColorIndex = signal.index) }
                 publish(

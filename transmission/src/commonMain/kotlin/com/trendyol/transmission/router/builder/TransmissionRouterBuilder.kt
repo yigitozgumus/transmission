@@ -56,5 +56,6 @@ fun TransmissionRouter(
         capacity = builder.capacity,
         dispatcher = builder.dispatcher,
         registerToGlobalRouter = builder.registerToGlobalRouter,
+        validateGlobalContracts = builder.validateGlobalContracts,
     )
 }

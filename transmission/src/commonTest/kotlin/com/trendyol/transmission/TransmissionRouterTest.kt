@@ -637,6 +637,72 @@ class TransmissionRouterTest {
     }
 
     @Test
+    fun `GIVEN duplicate global computation contracts WHEN validation is enabled THEN second router should fail initialization`() {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val firstTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "first" }
+        }
+        val secondTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "second" }
+        }
+        sut = TransmissionRouter(Contract.identity("validated-contract-router-1")) {
+            addTransformerSet(setOf(firstTransformer))
+            addDispatcher(testDispatcher)
+            validateGlobalContracts()
+        }
+
+        // When
+        val secondRouter = TransmissionRouter(Contract.identity("validated-contract-router-2")) {
+            addTransformerSet(setOf(secondTransformer))
+            addDispatcher(testDispatcher)
+            validateGlobalContracts()
+        }
+
+        // Then
+        assertEquals(false, secondRouter.isInitialized.value)
+        assertEquals(
+            "Duplicate global router contracts found for ${secondRouter.routerName}: " +
+                    "computation:${computationContract.key} with ${sut.routerName}",
+            secondRouter.initializationError.value?.message,
+        )
+    }
+
+    @Test
+    fun `GIVEN duplicate global computation contracts WHEN validation is disabled THEN first registered router should resolve query`() = runTest {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val firstTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "first" }
+        }
+        val secondTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "second" }
+        }
+        val queryRouter = TransmissionRouter(Contract.identity("duplicate-contract-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val firstRouter = TransmissionRouter(Contract.identity("duplicate-contract-owner-1")) {
+            addTransformerSet(setOf(firstTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val secondRouter = TransmissionRouter(Contract.identity("duplicate-contract-owner-2")) {
+            addTransformerSet(setOf(secondTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        val result = queryRouter.queryHelper.compute(computationContract)
+
+        // Then
+        assertEquals("first", result)
+
+        firstRouter.clear()
+        secondRouter.clear()
+    }
+
+    @Test
     fun `GIVEN duplicate router identities WHEN second router registers globally THEN it should fail`() {
         // Given
         val duplicateIdentity = Contract.identity("duplicate-router")

@@ -107,6 +107,14 @@ interface TransmissionRouterBuilderScope {
     fun registerToGlobalRouter(enabled: Boolean = true)
 
     /**
+     * Enables validation that globally registered routers do not expose duplicate data holder,
+     * computation, or execution contracts.
+     *
+     * Disabled by default to preserve existing first-owner-wins behavior for global query routing.
+     */
+    fun validateGlobalContracts(enabled: Boolean = true)
+
+    /**
      * Disables automatic initialization of the [TransmissionRouter].
      * 
      * When called, the router will not automatically initialize transformers during creation.

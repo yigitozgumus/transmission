@@ -56,6 +56,18 @@ object GlobalTransmissionRouter {
             .forEach { router -> router.receiveGlobalEffect(globalEnvelope) }
     }
 
+    internal fun validateContracts(router: TransmissionRouter) {
+        val conflicts = routers.value.values
+            .asSequence()
+            .filterNot { registeredRouter -> registeredRouter === router }
+            .flatMap { registeredRouter -> router.contractConflictsWith(registeredRouter).asSequence() }
+            .toList()
+
+        check(conflicts.isEmpty()) {
+            "Duplicate global router contracts found for ${router.routerName}: ${conflicts.joinToString()}"
+        }
+    }
+
     internal fun routeQuery(
         sourceRouter: TransmissionRouter,
         query: QueryType,

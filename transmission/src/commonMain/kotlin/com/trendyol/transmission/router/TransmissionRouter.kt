@@ -78,6 +78,7 @@ class TransmissionRouter internal constructor(
     internal val capacity: Capacity = Capacity.Default,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val registerToGlobalRouter: Boolean = true,
+    private val validateGlobalContracts: Boolean = false,
 ): StreamOwner {
 
     internal companion object {
@@ -243,6 +244,9 @@ class TransmissionRouter internal constructor(
                 initializeTransformers(transformerSet)
             } catch (throwable: Throwable) {
                 _initializationError.update { throwable }
+                if (registerToGlobalRouter) {
+                    GlobalTransmissionRouter.unregister(this@TransmissionRouter)
+                }
                 throw throwable
             }
         }
@@ -251,6 +255,9 @@ class TransmissionRouter internal constructor(
     private fun initializeTransformers(transformerSet: Set<Transformer>) {
         check(transformerSet.isNotEmpty()) {
             EMPTY_TRANSFORMER_SET_MESSAGE
+        }
+        if (registerToGlobalRouter && validateGlobalContracts) {
+            GlobalTransmissionRouter.validateContracts(this)
         }
         transformerSet.forEach { transformer ->
             transformer.run {
@@ -319,6 +326,28 @@ class TransmissionRouter internal constructor(
 
     internal fun receiveGlobalQueryResult(result: QueryResult) {
         _queryManager.receiveGlobalQueryResult(result)
+    }
+
+    internal fun contractConflictsWith(other: TransmissionRouter): List<String> {
+        val dataHolderConflicts = globalDataHolderKeys().intersect(other.globalDataHolderKeys())
+            .map { key -> "dataHolder:$key with ${other.routerName}" }
+        val computationConflicts = globalComputationKeys().intersect(other.globalComputationKeys())
+            .map { key -> "computation:$key with ${other.routerName}" }
+        val executionConflicts = globalExecutionKeys().intersect(other.globalExecutionKeys())
+            .map { key -> "execution:$key with ${other.routerName}" }
+        return dataHolderConflicts + computationConflicts + executionConflicts
+    }
+
+    private fun globalDataHolderKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.holderKeys() }.toSet()
+    }
+
+    private fun globalComputationKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }.toSet()
+    }
+
+    private fun globalExecutionKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.executionKeys() }.toSet()
     }
 
     /**

@@ -15,6 +15,7 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
     internal var transformerSetLoader: TransformerSetLoader? = null
     internal var autoInitialization: Boolean = true
     internal var registerToGlobalRouter: Boolean = true
+    internal var validateGlobalContracts: Boolean = false
     internal var capacity: Capacity = Capacity.Default
 
     private val scopeImpl = object : TransmissionRouterBuilderScope {
@@ -45,6 +46,10 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
 
         override fun registerToGlobalRouter(enabled: Boolean) {
             this@TransmissionRouterBuilderScopeImpl.registerToGlobalRouter = enabled
+        }
+
+        override fun validateGlobalContracts(enabled: Boolean) {
+            this@TransmissionRouterBuilderScopeImpl.validateGlobalContracts = enabled
         }
 
         override fun overrideInitialization() {

@@ -30,6 +30,21 @@ internal class TransformerStorage {
         else (internalTransmissionHolderSet as HolderState.Initialized).valueSet.contains(key)
     }
 
+    fun holderKeys(): Set<String> {
+        return when (val holderState = internalTransmissionHolderSet) {
+            is HolderState.Initialized -> holderState.valueSet
+            HolderState.Undefined -> emptySet()
+        }
+    }
+
+    fun computationKeys(): Set<String> {
+        return computationMap.keys
+    }
+
+    fun executionKeys(): Set<String> {
+        return executionMap.keys
+    }
+
     fun updateHolderData(data: Transmission.Data, key: String) {
         holderDataReference[key] = data
     }

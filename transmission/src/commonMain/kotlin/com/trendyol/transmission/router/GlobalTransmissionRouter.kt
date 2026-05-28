@@ -1,6 +1,8 @@
 package com.trendyol.transmission.router
 
 import com.trendyol.transmission.Transmission
+import com.trendyol.transmission.transformer.request.QueryResult
+import com.trendyol.transmission.transformer.request.QueryType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
@@ -52,6 +54,26 @@ object GlobalTransmissionRouter {
             .filterNot { router -> router === sourceRouter }
             .filter { router -> globalEnvelope.target == null || router.containsTransformer(globalEnvelope.target) }
             .forEach { router -> router.receiveGlobalEffect(globalEnvelope) }
+    }
+
+    internal fun routeQuery(
+        sourceRouter: TransmissionRouter,
+        query: QueryType,
+    ): Boolean {
+        val targetRouter = routers.value.values
+            .asSequence()
+            .filterNot { router -> router === sourceRouter }
+            .firstOrNull { router -> router.canResolve(query) }
+            ?: return false
+
+        targetRouter.receiveGlobalQuery(query)
+        return true
+    }
+
+    internal fun routeQueryResult(result: QueryResult): Boolean {
+        val ownerRouter = routers.value[result.owner] ?: return false
+        ownerRouter.receiveGlobalQueryResult(result)
+        return true
     }
 
     internal fun clear() {

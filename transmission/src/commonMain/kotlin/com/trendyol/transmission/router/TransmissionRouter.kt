@@ -7,6 +7,8 @@ import com.trendyol.transmission.transformer.Transformer
 import com.trendyol.transmission.transformer.checkpoint.CheckpointTracker
 import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.QueryHandler
+import com.trendyol.transmission.transformer.request.QueryResult
+import com.trendyol.transmission.transformer.request.QueryType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -289,6 +291,34 @@ class TransmissionRouter internal constructor(
 
     internal fun containsTransformer(identity: Contract.Identity): Boolean {
         return transformerSet.any { transformer -> transformer.identity == identity }
+    }
+
+    internal fun canResolve(query: QueryType): Boolean {
+        return when (query) {
+            is QueryType.Data<*> -> transformerSet.any { transformer ->
+                transformer.storage.isHolderStateInitialized() && transformer.storage.isHolderDataDefined(query.key)
+            }
+            is QueryType.Computation<*> -> transformerSet.any { transformer ->
+                transformer.storage.hasComputation(query.key)
+            }
+            is QueryType.ComputationWithArgs<*, *> -> transformerSet.any { transformer ->
+                transformer.storage.hasComputation(query.key)
+            }
+            is QueryType.Execution -> transformerSet.any { transformer ->
+                transformer.storage.hasExecution(query.key)
+            }
+            is QueryType.ExecutionWithArgs<*> -> transformerSet.any { transformer ->
+                transformer.storage.hasExecution(query.key)
+            }
+        }
+    }
+
+    internal fun receiveGlobalQuery(query: QueryType) {
+        _queryManager.processGlobalQuery(query)
+    }
+
+    internal fun receiveGlobalQueryResult(result: QueryResult) {
+        _queryManager.receiveGlobalQueryResult(result)
     }
 
     /**

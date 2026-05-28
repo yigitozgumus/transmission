@@ -46,7 +46,7 @@ internal class QueryManager(
             outGoingQuery.send(
                 QueryType.Data(
                     sender = routerRef.routerName,
-                    key = contract.key,
+                    contract = contract,
                     queryIdentifier = queryIdentifier
                 )
             )
@@ -64,7 +64,7 @@ internal class QueryManager(
             outGoingQuery.send(
                 QueryType.Computation(
                     sender = routerRef.routerName,
-                    key = contract.key,
+                    contract = contract,
                     invalidate = invalidate,
                     queryIdentifier = queryIdentifier
                 )
@@ -84,7 +84,7 @@ internal class QueryManager(
             outGoingQuery.send(
                 QueryType.ComputationWithArgs(
                     sender = routerRef.routerName,
-                    key = contract.key,
+                    contract = contract,
                     args = args,
                     invalidate = invalidate,
                     queryIdentifier = queryIdentifier
@@ -99,7 +99,7 @@ internal class QueryManager(
         override suspend fun execute(contract: Contract.Execution) {
             outGoingQuery.send(
                 QueryType.Execution(
-                    key = contract.key,
+                    contract = contract,
                 )
             )
         }
@@ -110,7 +110,7 @@ internal class QueryManager(
         ) {
             outGoingQuery.send(
                 QueryType.ExecutionWithArgs(
-                    key = contract.key,
+                    contract = contract,
                     args = args,
                 )
             )
@@ -121,16 +121,16 @@ internal class QueryManager(
 
     private fun processQuery(query: QueryType) = queryScope.launch {
         when (query) {
-            is QueryType.Computation -> processComputationQuery(query)
-            is QueryType.Data -> processDataQuery(query)
-            is QueryType.ComputationWithArgs<*> -> processComputationQueryWithArgs(query)
+            is QueryType.Computation<*> -> processComputationQuery(query)
+            is QueryType.Data<*> -> processDataQuery(query)
+            is QueryType.ComputationWithArgs<*, *> -> processComputationQueryWithArgs(query)
             is QueryType.Execution -> processExecution(query)
             is QueryType.ExecutionWithArgs<*> -> processExecutionWithArgs(query)
         }
     }
 
     private fun processDataQuery(
-        query: QueryType.Data,
+        query: QueryType.Data<*>,
     ) = queryScope.launch {
         val dataHolder = routerRef.transformerSet
             .filter { it.storage.isHolderStateInitialized() }
@@ -149,7 +149,7 @@ internal class QueryManager(
     }
 
     private fun processComputationQuery(
-        query: QueryType.Computation,
+        query: QueryType.Computation<*>,
     ) = queryScope.launch {
         val computationHolder = routerRef.transformerSet
             .find { it.storage.hasComputation(query.key) }
@@ -175,14 +175,14 @@ internal class QueryManager(
         }
     }
 
-    private fun <A : Any> processComputationQueryWithArgs(
-        query: QueryType.ComputationWithArgs<A>,
+    private fun processComputationQueryWithArgs(
+        query: QueryType.ComputationWithArgs<*, *>,
     ) = queryScope.launch {
         val computationHolder = routerRef.transformerSet
             .find { it.storage.hasComputation(query.key) }
         val computationToSend = queryScope.async {
             val computationData = runCatching {
-                computationHolder?.storage?.getComputationByKey<A>(query.key)
+                computationHolder?.storage?.getComputationByKey<Any>(query.key)
                     ?.getResult(
                         computationHolder.communicationScope,
                         query.invalidate,

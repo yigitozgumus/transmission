@@ -7,12 +7,15 @@ import com.trendyol.transmission.transformer.Transformer
 import com.trendyol.transmission.transformer.checkpoint.CheckpointTracker
 import com.trendyol.transmission.transformer.request.Contract
 import com.trendyol.transmission.transformer.request.QueryHandler
+import com.trendyol.transmission.transformer.request.QueryResult
+import com.trendyol.transmission.transformer.request.QueryType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -74,6 +77,8 @@ class TransmissionRouter internal constructor(
     internal val autoInitialization: Boolean = true,
     internal val capacity: Capacity = Capacity.Default,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val registerToGlobalRouter: Boolean = true,
+    private val validateGlobalContracts: Boolean = false,
 ): StreamOwner {
 
     internal companion object {
@@ -88,6 +93,8 @@ class TransmissionRouter internal constructor(
     internal val transformerSet: Set<Transformer> = _transformerSet
 
     internal val routerName: String = identity.key
+
+    private var globalEffectBridgeJob: Job? = null
 
     private val _isInitialized = MutableStateFlow(false)
     private val _initializationError = MutableStateFlow<Throwable?>(null)
@@ -133,6 +140,10 @@ class TransmissionRouter internal constructor(
     val queryHelper: QueryHandler = _queryManager.handler
 
     init {
+        if (registerToGlobalRouter) {
+            GlobalTransmissionRouter.register(this)
+            startGlobalEffectBridge()
+        }
         if (autoInitialization) {
             initializeInternal(transformerSetLoader)
         }
@@ -233,6 +244,9 @@ class TransmissionRouter internal constructor(
                 initializeTransformers(transformerSet)
             } catch (throwable: Throwable) {
                 _initializationError.update { throwable }
+                if (registerToGlobalRouter) {
+                    GlobalTransmissionRouter.unregister(this@TransmissionRouter)
+                }
                 throw throwable
             }
         }
@@ -241,6 +255,9 @@ class TransmissionRouter internal constructor(
     private fun initializeTransformers(transformerSet: Set<Transformer>) {
         check(transformerSet.isNotEmpty()) {
             EMPTY_TRANSFORMER_SET_MESSAGE
+        }
+        if (registerToGlobalRouter && validateGlobalContracts) {
+            GlobalTransmissionRouter.validateContracts(this)
         }
         transformerSet.forEach { transformer ->
             transformer.run {
@@ -258,6 +275,79 @@ class TransmissionRouter internal constructor(
             }
         }
         _isInitialized.update { true }
+    }
+
+    private fun startGlobalEffectBridge() {
+        globalEffectBridgeJob = routerScope.launch {
+            transmissionBus.effectStream.collect { envelope ->
+                if (envelope.originRouter == null || envelope.originRouter == routerName) {
+                    GlobalTransmissionRouter.publishEffect(
+                        sourceRouter = this@TransmissionRouter,
+                        envelope = envelope,
+                    )
+                }
+            }
+        }
+    }
+
+    internal fun receiveGlobalEffect(envelope: TransmissionEnvelope<Transmission.Effect>) {
+        routerScope.launch {
+            transmissionBus.send(envelope)
+        }
+    }
+
+    internal fun containsTransformer(identity: Contract.Identity): Boolean {
+        return transformerSet.any { transformer -> transformer.identity == identity }
+    }
+
+    internal fun canResolve(query: QueryType): Boolean {
+        return when (query) {
+            is QueryType.Data<*> -> transformerSet.any { transformer ->
+                transformer.storage.isHolderStateInitialized() && transformer.storage.isHolderDataDefined(query.key)
+            }
+            is QueryType.Computation<*> -> transformerSet.any { transformer ->
+                transformer.storage.hasComputation(query.key)
+            }
+            is QueryType.ComputationWithArgs<*, *> -> transformerSet.any { transformer ->
+                transformer.storage.hasComputation(query.key)
+            }
+            is QueryType.Execution -> transformerSet.any { transformer ->
+                transformer.storage.hasExecution(query.key)
+            }
+            is QueryType.ExecutionWithArgs<*> -> transformerSet.any { transformer ->
+                transformer.storage.hasExecution(query.key)
+            }
+        }
+    }
+
+    internal fun receiveGlobalQuery(query: QueryType) {
+        _queryManager.processGlobalQuery(query)
+    }
+
+    internal fun receiveGlobalQueryResult(result: QueryResult) {
+        _queryManager.receiveGlobalQueryResult(result)
+    }
+
+    internal fun contractConflictsWith(other: TransmissionRouter): List<String> {
+        val dataHolderConflicts = globalDataHolderKeys().intersect(other.globalDataHolderKeys())
+            .map { key -> "dataHolder:$key with ${other.routerName}" }
+        val computationConflicts = globalComputationKeys().intersect(other.globalComputationKeys())
+            .map { key -> "computation:$key with ${other.routerName}" }
+        val executionConflicts = globalExecutionKeys().intersect(other.globalExecutionKeys())
+            .map { key -> "execution:$key with ${other.routerName}" }
+        return dataHolderConflicts + computationConflicts + executionConflicts
+    }
+
+    private fun globalDataHolderKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.holderKeys() }.toSet()
+    }
+
+    private fun globalComputationKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }.toSet()
+    }
+
+    private fun globalExecutionKeys(): Set<String> {
+        return transformerSet.flatMap { transformer -> transformer.storage.executionKeys() }.toSet()
     }
 
     /**
@@ -283,6 +373,10 @@ class TransmissionRouter internal constructor(
      * @see Transformer.clear
      */
     fun clear() {
+        if (registerToGlobalRouter) {
+            GlobalTransmissionRouter.unregister(this)
+        }
+        globalEffectBridgeJob?.cancel()
         transformerSet.forEach { it.clear() }
         routerScope.cancel()
     }

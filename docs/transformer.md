@@ -4,22 +4,43 @@ A **Transformer** is the core component that processes transmissions and contain
 
 ## Basic Structure
 
+Use `configure { ... }` to declare handlers, computations, executions, data holders, and lifecycle callbacks together:
+
 ```kotlin
 class MyTransformer : Transformer() {
-    
-    override val handlers: Handlers = handlers {
-        // Define signal and effect handlers
-    }
-    
-    override val computations: Computations = computations {
-        // Define computations for inter-transformer communication
-    }
-    
-    override val executions: Executions = executions {
-        // Define executions for fire-and-forget operations
+    init {
+        configure {
+            onSignal<MySignal> { signal ->
+                // Handle signal
+            }
+
+            onEffect<MyEffect> { effect ->
+                // Handle effect
+            }
+
+            computation(myComputationContract) {
+                // Return computed value
+            }
+
+            execution(myExecutionContract) {
+                // Run fire-and-forget work
+            }
+        }
     }
 }
 ```
+
+For tests and simple local definitions, use the `transformer { ... }` factory:
+
+```kotlin
+val myTransformer = transformer {
+    onSignal<MySignal> { signal ->
+        send(MyData(signal.value))
+    }
+}
+```
+
+Older override-based definitions still work, but `handlers`, `computations`, and `executions` replacement DSLs are deprecated in favor of `configure`.
 
 ## Constructor Parameters
 
@@ -93,16 +114,16 @@ Within handler lambdas, you have access to `CommunicationScope` which provides:
 send(UserData(user))
 ```
 
-### Publishing Effects
+### Publishing and Targeting Effects
 
 ```kotlin
-// Publish effect to other transformers
+// Broadcast effect to all matching handlers
 publish(LoggingEffect("User logged in"))
 
-// Publish effect to specific transformer
-publish(
+// Send effect to a specific transformer identity
+send(
     effect = NotificationEffect("Welcome!"),
-    identity = notificationTransformerIdentity
+    identity = notificationTransformerIdentity,
 )
 ```
 
@@ -180,29 +201,25 @@ val holder = dataHolder(
 
 ## Computations
 
-Computations enable inter-transformer communication for retrieving data:
+Computations enable inter-transformer communication for retrieving values:
 
 ```kotlin
 class CalculatorTransformer : Transformer() {
-    
-    override val computations: Computations = computations {
-        // Simple computation
-        register(currentValueContract) {
-            getCurrentCalculatorValue()
-        }
-        
-        // Computation with arguments
-        register(calculateContract) { input: CalculationInput ->
-            performCalculation(input)
-        }
-        
-        // Cached computation (result is cached)
-        register(expensiveCalculationContract) {
-            expensiveOperation()
+    init {
+        configure {
+            computation(currentValueContract) {
+                getCurrentCalculatorValue()
+            }
+
+            computation(calculateContract) { input: CalculationInput ->
+                performCalculation(input)
+            }
         }
     }
 }
 ```
+
+Contract-level caching is enabled when the contract is created, for example `Contract.computation<Result>(useCache = true)`.
 
 ### Using Computations
 
@@ -228,16 +245,15 @@ Executions are fire-and-forget operations for side effects:
 
 ```kotlin
 class LoggingTransformer : Transformer() {
-    
-    override val executions: Executions = executions {
-        // Simple execution
-        register(logMessageContract) {
-            writeToLogFile("Message logged")
-        }
-        
-        // Execution with arguments
-        register(logWithLevelContract) { logEntry: LogEntry ->
-            writeToLogFile(logEntry.level, logEntry.message)
+    init {
+        configure {
+            execution(logMessageContract) {
+                writeToLogFile("Message logged")
+            }
+
+            execution(logWithLevelContract) { logEntry: LogEntry ->
+                writeToLogFile(logEntry.level, logEntry.message)
+            }
         }
     }
 }
@@ -295,19 +311,20 @@ class ComplexTransformer : Transformer() {
 
 ```kotlin
 class SafeTransformer : Transformer() {
-    
-    override fun onError(throwable: Throwable) {
-        // Handle errors that occur in this transformer
-        publish(ErrorEffect("Transformer error: ${throwable.message}"))
-    }
-    
-    override val handlers: Handlers = handlers {
-        onSignal<RiskyOperationSignal> { signal ->
-            try {
-                val result = riskyOperation(signal.data)
-                send(SuccessData(result))
-            } catch (e: Exception) {
-                send(ErrorData(e.message))
+    init {
+        configure {
+            onError { throwable ->
+                // Handle errors that occur in this transformer
+                println("Transformer error: ${throwable.message}")
+            }
+
+            onSignal<RiskyOperationSignal> { signal ->
+                try {
+                    val result = riskyOperation(signal.data)
+                    send(SuccessData(result))
+                } catch (e: Exception) {
+                    send(ErrorData(e.message))
+                }
             }
         }
     }

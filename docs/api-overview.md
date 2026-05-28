@@ -1,43 +1,35 @@
 # Transmission Library API Overview
 
-Transmission is a Kotlin Multiplatform library that provides a powerful router-based architecture for managing data flow and transformations in your applications.
+Transmission is a Kotlin Multiplatform library for router-based asynchronous communication between business-logic components.
 
-## Core Modules
+## Core Module: `transmission`
 
-### transmission
-The core library containing the main routing and transformation infrastructure:
-- **Router**: Central routing mechanism for managing data flow
-- **Transformer**: Interface for data transformation and processing
-- **Effects**: Side effects management system
-- **Data Holders**: State management utilities
+The core library provides:
 
-### transmission-test
-Testing utilities and framework for Transmission-based applications:
-- **TransmissionTest**: Main testing framework class
-- **Test Extensions**: Utility functions for testing transformers
-- **Mock Utilities**: Helper classes for creating test doubles
+- **`TransmissionRouter`**: central router for processing signals/effects, streaming data/effects, and serving queries.
+- **`Transformer`**: base class for business logic. Transformers handle `Transmission.Signal` and `Transmission.Effect` values and can emit `Transmission.Data`.
+- **`configure { ... }` / `transformer { ... }`**: composition APIs for declaring handlers, data holders, computations, executions, and lifecycle callbacks together.
+- **Handlers**: `onSignal<T>` and `onEffect<T>` route exact transmission types to suspending handler blocks.
+- **Data holders**: transformer-owned state that can publish updates to router data streams.
+- **Contracts**: typed keys for identities, data holders, computations, executions, and checkpoints.
+- **Global router registration**: routers register globally by default so effects and unresolved queries can cross router boundaries.
 
-### transmission-viewmodel
-Integration with ViewModel pattern for UI applications:
-- **RouterViewModel**: ViewModel implementation with Transmission router integration
-- **State Management**: Reactive state handling for UI components
+## Testing Module: `transmission-test`
 
-## Key Concepts
+Testing utilities for transformer and router flows, including helpers for driving signals/effects and asserting emitted data.
 
-### Router Architecture
-The router acts as the central hub for your application's data flow, managing transformers and their interactions.
+## ViewModel Module: `transmission-viewmodel`
 
-### Transformers
-Transformers are the core processing units that handle specific data transformations and business logic.
+ViewModel integration around `TransmissionRouter`:
 
-### Effects
-Effects provide a clean way to handle side effects while maintaining the unidirectional data flow.
+- **`RouterViewModel`**: creates and owns a router from a transformer set or `TransformerSetLoader`.
+- **`RouterViewModelConfig`**: configures router capacity, dispatcher, and identity.
+- **Stream helpers**: expose typed data/effect flows and data `StateFlow`s.
 
-## Getting Started
+## Typical Flow
 
-1. Add the core transmission dependency
-2. Define your transformers
-3. Configure your router
-4. Set up your data flow
-
-For detailed usage examples and API documentation, see the individual module documentation. 
+1. Define `Transmission.Signal`, `Transmission.Effect`, and `Transmission.Data` types.
+2. Create one or more `Transformer`s with `configure { ... }`, `transformer { ... }`, or subclass overrides.
+3. Install transformers in a `TransmissionRouter` with `addTransformerSet(...)` or `addLoader(...)`.
+4. Send inputs with `router.process(signal)`.
+5. Observe outputs with `router.streamData<T>()` and `router.streamEffect<T>()`.

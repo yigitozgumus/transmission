@@ -128,19 +128,19 @@ onSignal<LoadUserSignal> { signal ->
 }
 ```
 
-### Publishing Effects
+### Publishing and Targeting Effects
 
-Effects are published to other Transformers:
+Effects can be broadcast to matching handlers or sent to a specific transformer identity:
 
 ```kotlin
 onSignal<UserActionSignal> { signal ->
-    // Publish to any transformer listening for this effect
+    // Broadcast to any transformer listening for this effect
     publish(LoggingEffect("User performed: ${signal.action}"))
-    
-    // Publish to specific transformer
-    publish(
+
+    // Send to a specific transformer
+    send(
         effect = NotificationEffect("Action completed"),
-        identity = notificationTransformerIdentity
+        identity = notificationTransformerIdentity,
     )
 }
 ```

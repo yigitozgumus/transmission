@@ -81,7 +81,7 @@ data class RouterViewModelConfig(
  * class FeatureViewModel : RouterViewModel(
  *     loader = MyTransformerSetLoader(),
  *     config = RouterViewModelConfig(
- *         capacity = Capacity.High,
+ *         capacity = Capacity.Custom(256),
  *         dispatcher = Dispatchers.IO
  *     )
  * ) {

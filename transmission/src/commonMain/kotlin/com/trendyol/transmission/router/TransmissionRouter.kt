@@ -17,12 +17,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlin.reflect.KClass
 
 /**
  * Central routing service that manages signal processing and data flow in Transmission applications.
@@ -91,6 +95,11 @@ class TransmissionRouter internal constructor(
 
     private val _transformerSet: LinkedHashSet<Transformer> = linkedSetOf()
     internal val transformerSet: Set<Transformer> = _transformerSet
+    private val signalInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Signal>>> = mutableMapOf()
+    private val effectInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Effect>>> = mutableMapOf()
+    private var signalRoutes: Map<KClass<out Transmission.Signal>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
+    private var effectRoutes: Map<KClass<out Transmission.Effect>, List<Transformer>> = emptyMap()
+    private var effectRoutingJob: Job? = null
 
     internal val routerName: String = identity.key
 
@@ -204,7 +213,7 @@ class TransmissionRouter internal constructor(
      */
     fun process(signal: Transmission.Signal) {
         routerScope.launch {
-            transmissionBus.send(signal)
+            routeSignal(TransmissionEnvelope(payload = signal))
         }
     }
 
@@ -260,14 +269,16 @@ class TransmissionRouter internal constructor(
         if (registerToGlobalRouter && validateGlobalContracts) {
             GlobalTransmissionRouter.validateContracts(this)
         }
+        buildRoutingIndexes(transformerSet)
+        startEffectRouter()
         transformerSet.forEach { transformer ->
             transformer.run {
                 bindCheckpointTracker(checkpointTracker)
-                startSignalCollection(incoming = transmissionBus.signalStream)
+                startSignalCollection(incoming = signalInputs.getValue(transformer).receiveAsFlow())
                 startDataPublishing(data = transmissionBus.dataProducer)
                 startEffectProcessing(
                     producer = transmissionBus.effectProducer,
-                    incoming = transmissionBus.effectsFor(identity = identity),
+                    incoming = effectInputs.getValue(transformer).receiveAsFlow(),
                 )
                 startQueryProcessing(
                     incomingQuery = _queryManager.incomingQueryResponse,
@@ -276,6 +287,50 @@ class TransmissionRouter internal constructor(
             }
         }
         _isInitialized.update { true }
+    }
+
+    private fun buildRoutingIndexes(transformerSet: Set<Transformer>) {
+        signalInputs.clear()
+        effectInputs.clear()
+        transformerSet.forEach { transformer ->
+            signalInputs[transformer] = Channel(capacity = capacity.value)
+            effectInputs[transformer] = Channel(capacity = capacity.value)
+        }
+        signalRoutes = transformerSet
+            .flatMap { transformer ->
+                transformer.handlerRegistry.signalTypes().map { type -> type to signalInputs.getValue(transformer) }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+        effectRoutes = transformerSet
+            .flatMap { transformer ->
+                transformer.handlerRegistry.effectTypes().map { type -> type to transformer }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+    }
+
+    private suspend fun routeSignal(envelope: TransmissionEnvelope<Transmission.Signal>) {
+        signalRoutes[envelope.payload::class].orEmpty().forEach { input ->
+            input.send(envelope)
+        }
+    }
+
+    private fun startEffectRouter() {
+        effectRoutingJob?.cancel()
+        effectRoutingJob = routerScope.launch {
+            transmissionBus.effectStream.collect { envelope ->
+                routeEffect(envelope)
+            }
+        }
+    }
+
+    private suspend fun routeEffect(envelope: TransmissionEnvelope<Transmission.Effect>) {
+        effectRoutes[envelope.payload::class]
+            .orEmpty()
+            .asSequence()
+            .filter { transformer -> envelope.target == null || envelope.target == transformer.identity }
+            .forEach { transformer ->
+                effectInputs.getValue(transformer).send(envelope)
+            }
     }
 
     private fun startGlobalEffectBridge() {

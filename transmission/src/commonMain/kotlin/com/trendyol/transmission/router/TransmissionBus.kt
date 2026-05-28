@@ -42,6 +42,10 @@ internal class TransmissionBus(
         effectBroadcast.producer.send(TransmissionEnvelope(payload = effect))
     }
 
+    suspend fun send(envelope: TransmissionEnvelope<Transmission.Effect>) {
+        effectBroadcast.producer.send(envelope)
+    }
+
     fun effectsFor(identity: Contract.Identity): Flow<TransmissionEnvelope<Transmission.Effect>> {
         return effectStream.filter { it.target == null || it.target == identity }
     }

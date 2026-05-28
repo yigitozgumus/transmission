@@ -35,13 +35,15 @@ class TargetTransformer : Transformer() {
 
 ```kotlin
 class SpecificTransformer : Transformer() {
-    override val handlers: Handlers = handlers {
-        onSignal<SendToSpecificSignal> { signal ->
-            // Send effect to a specific transformer
-            publish(
-                effect = SpecificEffect(signal.data),
-                identity = targetTransformerIdentity
-            )
+    init {
+        configure {
+            onSignal<SendToSpecificSignal> { signal ->
+                // Send effect to a specific transformer
+                send(
+                    effect = SpecificEffect(signal.data),
+                    identity = targetTransformerIdentity,
+                )
+            }
         }
     }
 }

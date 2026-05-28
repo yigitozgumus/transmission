@@ -8,4 +8,5 @@ internal data class TransmissionEnvelope<out T : Transmission>(
     val source: Contract.Identity? = null,
     val target: Contract.Identity? = null,
     val dataHolder: Contract.DataHolder<*>? = null,
+    val originRouter: String? = null,
 )

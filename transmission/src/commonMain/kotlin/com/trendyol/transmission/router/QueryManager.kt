@@ -43,6 +43,12 @@ internal class QueryManager(
 
         override suspend fun <D : Transmission.Data?> getData(contract: Contract.DataHolder<D>): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
+            val result = queryScope.async {
+                routerQueryResultChannel
+                    .filterIsInstance<QueryResult.Data<D>>()
+                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
+                    .first().data
+            }
             outGoingQuery.send(
                 QueryType.Data(
                     sender = routerRef.routerName,
@@ -50,10 +56,7 @@ internal class QueryManager(
                     queryIdentifier = queryIdentifier
                 )
             )
-            return routerQueryResultChannel
-                .filterIsInstance<QueryResult.Data<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            return result.await()
         }
 
         override suspend fun <D : Any?> compute(
@@ -61,6 +64,12 @@ internal class QueryManager(
             invalidate: Boolean,
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
+            val result = queryScope.async {
+                routerQueryResultChannel
+                    .filterIsInstance<QueryResult.Computation<D>>()
+                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
+                    .first().data
+            }
             outGoingQuery.send(
                 QueryType.Computation(
                     sender = routerRef.routerName,
@@ -69,10 +78,7 @@ internal class QueryManager(
                     queryIdentifier = queryIdentifier
                 )
             )
-            return routerQueryResultChannel
-                .filterIsInstance<QueryResult.Computation<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            return result.await()
         }
 
         override suspend fun <A : Any, D : Any?> compute(
@@ -81,6 +87,12 @@ internal class QueryManager(
             invalidate: Boolean,
         ): D {
             val queryIdentifier = IdentifierGenerator.generateIdentifier()
+            val result = queryScope.async {
+                routerQueryResultChannel
+                    .filterIsInstance<QueryResult.Computation<D>>()
+                    .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
+                    .first().data
+            }
             outGoingQuery.send(
                 QueryType.ComputationWithArgs(
                     sender = routerRef.routerName,
@@ -90,10 +102,7 @@ internal class QueryManager(
                     queryIdentifier = queryIdentifier
                 )
             )
-            return routerQueryResultChannel
-                .filterIsInstance<QueryResult.Computation<D>>()
-                .filter { it.resultIdentifier == queryIdentifier && it.key == contract.key }
-                .first().data
+            return result.await()
         }
 
         override suspend fun execute(contract: Contract.Execution) {
@@ -119,40 +128,61 @@ internal class QueryManager(
 
     // region process queries
 
-    private fun processQuery(query: QueryType) = queryScope.launch {
+    internal fun processGlobalQuery(query: QueryType) = processQuery(query, allowGlobalFallback = false)
+
+    internal fun receiveGlobalQueryResult(result: QueryResult) {
+        queryScope.launch {
+            routerQueryResultChannel.emit(result)
+        }
+    }
+
+    private fun processQuery(query: QueryType, allowGlobalFallback: Boolean = true) = queryScope.launch {
         when (query) {
-            is QueryType.Computation<*> -> processComputationQuery(query)
-            is QueryType.Data<*> -> processDataQuery(query)
-            is QueryType.ComputationWithArgs<*, *> -> processComputationQueryWithArgs(query)
-            is QueryType.Execution -> processExecution(query)
-            is QueryType.ExecutionWithArgs<*> -> processExecutionWithArgs(query)
+            is QueryType.Computation<*> -> processComputationQuery(query, allowGlobalFallback)
+            is QueryType.Data<*> -> processDataQuery(query, allowGlobalFallback)
+            is QueryType.ComputationWithArgs<*, *> -> processComputationQueryWithArgs(query, allowGlobalFallback)
+            is QueryType.Execution -> processExecution(query, allowGlobalFallback)
+            is QueryType.ExecutionWithArgs<*> -> processExecutionWithArgs(query, allowGlobalFallback)
+        }
+    }
+
+    private suspend fun sendQueryResult(result: QueryResult) {
+        if (result.owner == routerRef.routerName) {
+            routerQueryResultChannel.emit(result)
+        } else if (!GlobalTransmissionRouter.routeQueryResult(result)) {
+            queryResultChannel.send(result)
         }
     }
 
     private fun processDataQuery(
         query: QueryType.Data<*>,
+        allowGlobalFallback: Boolean,
     ) = queryScope.launch {
         val dataHolder = routerRef.transformerSet
             .filter { it.storage.isHolderStateInitialized() }
             .find { it.storage.isHolderDataDefined(query.key) }
-        val dataToSend = QueryResult.Data(
-            owner = query.sender,
-            key = query.key,
-            data = dataHolder?.storage?.getHolderDataByKey(query.key),
-            resultIdentifier = query.queryIdentifier,
-        )
-        if (query.sender == routerRef.routerName) {
-            routerQueryResultChannel.emit(dataToSend)
-        } else {
-            queryResultChannel.send(dataToSend)
+        if (dataHolder == null && allowGlobalFallback && GlobalTransmissionRouter.routeQuery(routerRef, query)) {
+            return@launch
         }
+        sendQueryResult(
+            QueryResult.Data(
+                owner = query.sender,
+                key = query.key,
+                data = dataHolder?.storage?.getHolderDataByKey(query.key),
+                resultIdentifier = query.queryIdentifier,
+            )
+        )
     }
 
     private fun processComputationQuery(
         query: QueryType.Computation<*>,
+        allowGlobalFallback: Boolean,
     ) = queryScope.launch {
         val computationHolder = routerRef.transformerSet
             .find { it.storage.hasComputation(query.key) }
+        if (computationHolder == null && allowGlobalFallback && GlobalTransmissionRouter.routeQuery(routerRef, query)) {
+            return@launch
+        }
         val computationToSend = queryScope.async {
             val computationData = runCatching {
                 computationHolder?.storage?.getComputationByKey(query.key)
@@ -168,18 +198,18 @@ internal class QueryManager(
                 resultIdentifier = query.queryIdentifier
             )
         }
-        if (query.sender == routerRef.routerName) {
-            routerQueryResultChannel.emit(computationToSend.await())
-        } else {
-            queryResultChannel.send(computationToSend.await())
-        }
+        sendQueryResult(computationToSend.await())
     }
 
     private fun processComputationQueryWithArgs(
         query: QueryType.ComputationWithArgs<*, *>,
+        allowGlobalFallback: Boolean,
     ) = queryScope.launch {
         val computationHolder = routerRef.transformerSet
             .find { it.storage.hasComputation(query.key) }
+        if (computationHolder == null && allowGlobalFallback && GlobalTransmissionRouter.routeQuery(routerRef, query)) {
+            return@launch
+        }
         val computationToSend = queryScope.async {
             val computationData = runCatching {
                 computationHolder?.storage?.getComputationByKey<Any>(query.key)
@@ -199,33 +229,40 @@ internal class QueryManager(
                 resultIdentifier = query.queryIdentifier
             )
         }
-        if (query.sender == routerRef.routerName) {
-            routerQueryResultChannel.emit(computationToSend.await())
-        } else {
-            queryResultChannel.send(computationToSend.await())
-        }
+        sendQueryResult(computationToSend.await())
     }
 
     private fun processExecution(
         query: QueryType.Execution,
+        allowGlobalFallback: Boolean,
     ) = queryScope.launch {
         val executionHolder = routerRef.transformerSet
-            .find { it.storage.hasExecution(query.key) } ?: return@launch
+            .find { it.storage.hasExecution(query.key) }
+        if (executionHolder == null && allowGlobalFallback && GlobalTransmissionRouter.routeQuery(routerRef, query)) {
+            return@launch
+        }
+        executionHolder ?: return@launch
         runCatching {
             executionHolder.storage.getExecutionByKey(query.key)
                 ?.execute(executionHolder.communicationScope)
         }.onFailure(executionHolder::onError).getOrNull()
     }
 
-    private fun <A : Any> processExecutionWithArgs(query: QueryType.ExecutionWithArgs<A>) =
-        queryScope.launch {
-            val executionHolder = routerRef.transformerSet
-                .find { it.storage.hasExecution(query.key) } ?: return@launch
-            runCatching {
-                executionHolder.storage.getExecutionByKey<A>(query.key)
-                    ?.execute(executionHolder.communicationScope, query.args)
-            }.onFailure(executionHolder::onError).getOrNull()
+    private fun <A : Any> processExecutionWithArgs(
+        query: QueryType.ExecutionWithArgs<A>,
+        allowGlobalFallback: Boolean,
+    ) = queryScope.launch {
+        val executionHolder = routerRef.transformerSet
+            .find { it.storage.hasExecution(query.key) }
+        if (executionHolder == null && allowGlobalFallback && GlobalTransmissionRouter.routeQuery(routerRef, query)) {
+            return@launch
         }
+        executionHolder ?: return@launch
+        runCatching {
+            executionHolder.storage.getExecutionByKey<A>(query.key)
+                ?.execute(executionHolder.communicationScope, query.args)
+        }.onFailure(executionHolder::onError).getOrNull()
+    }
 
     // endregion
 }

@@ -2,10 +2,12 @@ package com.trendyol.transmission
 
 import app.cash.turbine.turbineScope
 import com.trendyol.transmission.effect.RouterEffect
+import com.trendyol.transmission.router.GlobalTransmissionRouter
 import com.trendyol.transmission.router.TransmissionRouter
 import com.trendyol.transmission.router.builder.TransmissionRouter
 import com.trendyol.transmission.transformer.FakeTransformer
 import com.trendyol.transmission.transformer.Transformer
+import com.trendyol.transmission.transformer.configure
 import com.trendyol.transmission.transformer.TestTransformer1
 import com.trendyol.transmission.transformer.TestTransformer2
 import com.trendyol.transmission.transformer.TestTransformer3
@@ -26,6 +28,7 @@ import com.trendyol.transmission.router.streamData
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.Test
@@ -36,6 +39,14 @@ class TransmissionRouterTest {
     private lateinit var sut: TransmissionRouter
 
     private val testDispatcher = UnconfinedTestDispatcher()
+
+    @AfterTest
+    fun tearDown() {
+        if (::sut.isInitialized) {
+            sut.clear()
+        }
+        GlobalTransmissionRouter.clear()
+    }
 
     @Test
     fun `GIVEN Router with no transformers WHEN initialize is called THEN router should throw IllegalStateException`() =
@@ -327,6 +338,392 @@ class TransmissionRouterTest {
         }
 
     @Test
+    fun `GIVEN Router WHEN created THEN it should register to global router by default`() {
+        // When
+        sut = TransmissionRouter {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+
+        // Then
+        assertEquals(1, GlobalTransmissionRouter.registeredRouterCount)
+    }
+
+    @Test
+    fun `GIVEN Router WHEN global registration is disabled THEN it should not register to global router`() {
+        // When
+        sut = TransmissionRouter {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+            registerToGlobalRouter(false)
+        }
+
+        // Then
+        assertEquals(0, GlobalTransmissionRouter.registeredRouterCount)
+    }
+
+    @Test
+    fun `GIVEN globally registered Router WHEN cleared THEN it should unregister from global router`() {
+        // Given
+        sut = TransmissionRouter {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+
+        // When
+        sut.clear()
+
+        // Then
+        assertEquals(0, GlobalTransmissionRouter.registeredRouterCount)
+    }
+
+    @Test
+    fun `GIVEN two globally registered Routers WHEN one emits effect THEN other router should handle it`() {
+        // Given
+        val senderTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onSignal<GlobalSignal> {
+                publish(GlobalEffect)
+            }
+        }
+        var handledEffects = 0
+        val receiverTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onEffect<GlobalEffect> {
+                handledEffects++
+            }
+        }
+        val senderRouter = TransmissionRouter(Contract.identity("sender-router")) {
+            addTransformerSet(setOf(senderTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val receiverRouter = TransmissionRouter(Contract.identity("receiver-router")) {
+            addTransformerSet(setOf(receiverTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = senderRouter
+
+        // When
+        senderRouter.process(GlobalSignal)
+
+        // Then
+        assertEquals(1, handledEffects)
+
+        receiverRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN two globally registered Routers WHEN effect is bridged THEN it should not loop globally`() {
+        // Given
+        val senderTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onSignal<GlobalSignal> {
+                publish(GlobalEffect)
+            }
+        }
+        var senderHandledEffects = 0
+        val senderEffectTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onEffect<GlobalEffect> {
+                senderHandledEffects++
+            }
+        }
+        var receiverHandledEffects = 0
+        val receiverTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onEffect<GlobalEffect> {
+                receiverHandledEffects++
+            }
+        }
+        val senderRouter = TransmissionRouter(Contract.identity("loop-sender-router")) {
+            addTransformerSet(setOf(senderTransformer, senderEffectTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val receiverRouter = TransmissionRouter(Contract.identity("loop-receiver-router")) {
+            addTransformerSet(setOf(receiverTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = senderRouter
+
+        // When
+        senderRouter.process(GlobalSignal)
+
+        // Then
+        assertEquals(1, senderHandledEffects)
+        assertEquals(1, receiverHandledEffects)
+
+        receiverRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN targeted global effect WHEN target transformer exists in another router THEN only target router should handle it`() {
+        // Given
+        val targetIdentity = Contract.identity("target-transformer")
+        val senderTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onSignal<GlobalSignal> {
+                send(GlobalEffect, targetIdentity)
+            }
+        }
+        var targetedHandledEffects = 0
+        val targetedTransformer = Transformer(identity = targetIdentity, dispatcher = testDispatcher).configure {
+            onEffect<GlobalEffect> {
+                targetedHandledEffects++
+            }
+        }
+        var nonTargetedHandledEffects = 0
+        val nonTargetedTransformer = Transformer(dispatcher = testDispatcher).configure {
+            onEffect<GlobalEffect> {
+                nonTargetedHandledEffects++
+            }
+        }
+        val senderRouter = TransmissionRouter(Contract.identity("target-sender-router")) {
+            addTransformerSet(setOf(senderTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val targetedRouter = TransmissionRouter(Contract.identity("target-receiver-router")) {
+            addTransformerSet(setOf(targetedTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val nonTargetedRouter = TransmissionRouter(Contract.identity("non-target-receiver-router")) {
+            addTransformerSet(setOf(nonTargetedTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = senderRouter
+
+        // When
+        senderRouter.process(GlobalSignal)
+
+        // Then
+        assertEquals(1, targetedHandledEffects)
+        assertEquals(0, nonTargetedHandledEffects)
+
+        targetedRouter.clear()
+        nonTargetedRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN data holder in another global router WHEN queried THEN it should resolve globally`() = runTest {
+        // Given
+        val dataContract = Contract.dataHolder<TestData>()
+        val queryRouter = TransmissionRouter(Contract.identity("data-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val dataTransformer = Transformer(dispatcher = testDispatcher).apply {
+            dataHolder(TestData("global-data"), dataContract)
+        }
+        val dataRouter = TransmissionRouter(Contract.identity("data-owner-router")) {
+            addTransformerSet(setOf(dataTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        val result = queryRouter.queryHelper.getData(dataContract)
+
+        // Then
+        assertEquals(TestData("global-data"), result)
+
+        dataRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN computation in another global router WHEN queried THEN it should resolve globally`() = runTest {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val queryRouter = TransmissionRouter(Contract.identity("computation-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val computationTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) {
+                "global-computation"
+            }
+        }
+        val computationRouter = TransmissionRouter(Contract.identity("computation-owner-router")) {
+            addTransformerSet(setOf(computationTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        val result = queryRouter.queryHelper.compute(computationContract)
+
+        // Then
+        assertEquals("global-computation", result)
+
+        computationRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN computation with args in another global router WHEN queried THEN it should resolve globally`() = runTest {
+        // Given
+        val computationContract = Contract.computationWithArgs<String, String>()
+        val queryRouter = TransmissionRouter(Contract.identity("computation-args-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val computationTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { args ->
+                "global-$args"
+            }
+        }
+        val computationRouter = TransmissionRouter(Contract.identity("computation-args-owner-router")) {
+            addTransformerSet(setOf(computationTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        val result = queryRouter.queryHelper.compute(computationContract, "args")
+
+        // Then
+        assertEquals("global-args", result)
+
+        computationRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN execution in another global router WHEN executed THEN it should run globally`() = runTest {
+        // Given
+        val executionContract = Contract.execution()
+        var executionCount = 0
+        val queryRouter = TransmissionRouter(Contract.identity("execution-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val executionTransformer = Transformer(dispatcher = testDispatcher).configure {
+            execution(executionContract) {
+                executionCount++
+            }
+        }
+        val executionRouter = TransmissionRouter(Contract.identity("execution-owner-router")) {
+            addTransformerSet(setOf(executionTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        queryRouter.queryHelper.execute(executionContract)
+
+        // Then
+        assertEquals(1, executionCount)
+
+        executionRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN execution with args in another global router WHEN executed THEN it should run globally`() = runTest {
+        // Given
+        val executionContract = Contract.executionWithArgs<String>()
+        val executedArgs = mutableListOf<String>()
+        val queryRouter = TransmissionRouter(Contract.identity("execution-args-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val executionTransformer = Transformer(dispatcher = testDispatcher).configure {
+            execution(executionContract) { args ->
+                executedArgs.add(args)
+            }
+        }
+        val executionRouter = TransmissionRouter(Contract.identity("execution-args-owner-router")) {
+            addTransformerSet(setOf(executionTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        queryRouter.queryHelper.execute(executionContract, "global-args")
+
+        // Then
+        assertEquals(listOf("global-args"), executedArgs)
+
+        executionRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN duplicate global computation contracts WHEN validation is enabled THEN second router should fail initialization`() {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val firstTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "first" }
+        }
+        val secondTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "second" }
+        }
+        sut = TransmissionRouter(Contract.identity("validated-contract-router-1")) {
+            addTransformerSet(setOf(firstTransformer))
+            addDispatcher(testDispatcher)
+            validateGlobalContracts()
+        }
+
+        // When
+        val secondRouter = TransmissionRouter(Contract.identity("validated-contract-router-2")) {
+            addTransformerSet(setOf(secondTransformer))
+            addDispatcher(testDispatcher)
+            validateGlobalContracts()
+        }
+
+        // Then
+        assertEquals(false, secondRouter.isInitialized.value)
+        assertEquals(
+            "Duplicate global router contracts found for ${secondRouter.routerName}: " +
+                    "computation:${computationContract.key} with ${sut.routerName}",
+            secondRouter.initializationError.value?.message,
+        )
+    }
+
+    @Test
+    fun `GIVEN duplicate global computation contracts WHEN validation is disabled THEN first registered router should resolve query`() = runTest {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val firstTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "first" }
+        }
+        val secondTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "second" }
+        }
+        val queryRouter = TransmissionRouter(Contract.identity("duplicate-contract-query-router")) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+        val firstRouter = TransmissionRouter(Contract.identity("duplicate-contract-owner-1")) {
+            addTransformerSet(setOf(firstTransformer))
+            addDispatcher(testDispatcher)
+        }
+        val secondRouter = TransmissionRouter(Contract.identity("duplicate-contract-owner-2")) {
+            addTransformerSet(setOf(secondTransformer))
+            addDispatcher(testDispatcher)
+        }
+        sut = queryRouter
+
+        // When
+        val result = queryRouter.queryHelper.compute(computationContract)
+
+        // Then
+        assertEquals("first", result)
+
+        firstRouter.clear()
+        secondRouter.clear()
+    }
+
+    @Test
+    fun `GIVEN duplicate router identities WHEN second router registers globally THEN it should fail`() {
+        // Given
+        val duplicateIdentity = Contract.identity("duplicate-router")
+        sut = TransmissionRouter(duplicateIdentity) {
+            addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+            addDispatcher(testDispatcher)
+        }
+
+        // When
+        val error = assertFailsWith<IllegalStateException> {
+            TransmissionRouter(duplicateIdentity) {
+                addTransformerSet(setOf(Transformer(dispatcher = testDispatcher)))
+                addDispatcher(testDispatcher)
+            }
+        }
+
+        // Then
+        assertEquals("Router with identity ${duplicateIdentity.key} is already registered.", error.message)
+    }
+
+    @Test
     fun `GIVEN cached computation with args WHEN called with different args THEN cache should be keyed by args`() =
         runTest {
             // Given
@@ -437,6 +834,10 @@ class TransmissionRouterTest {
     private interface ParentSignal : Transmission.Signal
 
     private object ChildSignal : ParentSignal
+
+    private object GlobalSignal : Transmission.Signal
+
+    private object GlobalEffect : Transmission.Effect
 
     private object UpdateHoldersSignal : Transmission.Signal
 

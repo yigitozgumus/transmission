@@ -24,27 +24,30 @@ val router = TransmissionRouter {
 val router = TransmissionRouter {
     addTransformerSet(transformers)
     addDispatcher(Dispatchers.IO) 
-    setCapacity(Capacity.High)
+    setCapacity(Capacity.Custom(256))
 }
 ```
 
-## Constructor Parameters
+## Creation API
+
+Create routers with the builder function from `com.trendyol.transmission.router.builder.TransmissionRouter`:
 
 ```kotlin
-class TransmissionRouter internal constructor(
-    identity: Contract.Identity,
-    transformerSetLoader: TransformerSetLoader? = null,
-    autoInitialization: Boolean = true,
-    capacity: Capacity = Capacity.Default,
-    dispatcher: CoroutineDispatcher = Dispatchers.Default,
-)
+fun TransmissionRouter(
+    identity: Contract.Identity = Contract.identity(),
+    scope: TransmissionRouterBuilderScope.() -> Unit,
+): TransmissionRouter
 ```
 
-- **identity**: Unique identifier for the router
-- **transformerSetLoader**: Lazy loading mechanism for transformers
-- **autoInitialization**: Whether to initialize automatically (default: true)
-- **capacity**: Buffer capacity for internal streams
-- **dispatcher**: Coroutine dispatcher for router operations
+Important builder options:
+
+- `addTransformerSet(setOf(...))`: install a static, non-empty transformer set.
+- `addLoader(loader)`: install a `TransformerSetLoader` for deferred loading during initialization.
+- `addDispatcher(dispatcher)`: set the router coroutine dispatcher.
+- `setCapacity(capacity)`: set internal channel capacity.
+- `overrideInitialization()`: disable automatic initialization; call `initialize(loader)` later.
+- `registerToGlobalRouter(enabled)`: opt in/out of process-wide router registration. Enabled by default.
+- `validateGlobalContracts(enabled)`: fail initialization when another globally registered router exposes duplicate data/computation/execution contracts. Disabled by default.
 
 ## Builder Configuration
 
@@ -72,16 +75,13 @@ Capacity affects the buffer size of internal streams:
 ```kotlin
 val router = TransmissionRouter {
     addTransformerSet(transformers)
-    setCapacity(Capacity.High) // Higher capacity = better performance under load
+    setCapacity(Capacity.Custom(256)) // Higher capacity = better performance under load
 }
 
 // Available capacity options
-enum class Capacity(val value: Int) {
-    Low(64),
-    Default(256), 
-    High(1024),
-    Unlimited(Channel.UNLIMITED)
-}
+Capacity.Default
+Capacity.Custom(128) // value must be between 0 and 256
+Capacity.Unlimited
 ```
 
 ### Custom Dispatcher
@@ -295,25 +295,40 @@ val router = TransmissionRouter {
 }
 ```
 
-### Multiple Routers
+### Multiple Routers and Global Routing
 
-For large applications, you might use multiple routers:
+Routers register with the process-wide global router by default. This allows:
+
+- broadcast effects from one router to be received by other registered routers;
+- targeted effects to cross routers when the target transformer identity exists in another router;
+- unresolved data/computation/execution queries to fall back to other registered routers.
 
 ```kotlin
-// Feature-specific routers
-val authRouter = TransmissionRouter {
+val authRouter = TransmissionRouter(Contract.identity("auth-router")) {
     addTransformerSet(authTransformers)
 }
 
-val dataRouter = TransmissionRouter {
+val dataRouter = TransmissionRouter(Contract.identity("data-router")) {
     addTransformerSet(dataTransformers)
 }
+```
 
-// Cross-router communication via effects
-authRouter.streamEffect<UserLoggedInEffect>()
-    .collect { effect ->
-        dataRouter.process(LoadUserDataSignal(effect.userId))
-    }
+Disable global registration for isolated routers:
+
+```kotlin
+val localRouter = TransmissionRouter {
+    addTransformerSet(localTransformers)
+    registerToGlobalRouter(false)
+}
+```
+
+Enable duplicate-contract validation when global query ownership must be deterministic:
+
+```kotlin
+val router = TransmissionRouter {
+    addTransformerSet(featureTransformers)
+    validateGlobalContracts()
+}
 ```
 
 ## Lifecycle Management
@@ -365,7 +380,7 @@ object TransmissionModule {
         transformers: Set<Transformer>
     ): TransmissionRouter = TransmissionRouter {
         addTransformerSet(transformers)
-        setCapacity(Capacity.High)
+        setCapacity(Capacity.Custom(256))
     }
 }
 ```
@@ -385,7 +400,7 @@ val transmissionModule = module {
     single { 
         TransmissionRouter {
             addTransformerSet(get<Set<Transformer>>())
-            setCapacity(Capacity.High)
+            setCapacity(Capacity.Custom(256))
         }
     }
 }
@@ -415,13 +430,13 @@ class SafeTransformer : Transformer() {
 // For high-throughput applications
 val router = TransmissionRouter {
     addTransformerSet(transformers)
-    setCapacity(Capacity.High) // or Capacity.Unlimited for extreme cases
+    setCapacity(Capacity.Custom(256)) // or Capacity.Unlimited for extreme cases
 }
 
 // For memory-constrained environments
 val router = TransmissionRouter {
     addTransformerSet(transformers) 
-    setCapacity(Capacity.Low)
+    setCapacity(Capacity.Custom(16))
 }
 ```
 
@@ -510,7 +525,7 @@ class UserViewModel : RouterViewModel(
 class FeatureViewModel : RouterViewModel(
     loader = FeatureTransformerSetLoader(),
     config = RouterViewModelConfig(
-        capacity = Capacity.High,
+        capacity = Capacity.Custom(256),
         dispatcher = Dispatchers.IO,
         identity = Contract.identity("feature-router")
     )
@@ -554,7 +569,7 @@ data class RouterViewModelConfig(
 ```kotlin
 // High-performance configuration
 val config = RouterViewModelConfig(
-    capacity = Capacity.High,
+    capacity = Capacity.Custom(256),
     dispatcher = Dispatchers.IO
 )
 
@@ -615,7 +630,7 @@ class MainViewModel @Inject constructor(
     private val transformerSetLoader: MainTransformerSetLoader
 ) : RouterViewModel(
     loader = transformerSetLoader,
-    config = RouterViewModelConfig(capacity = Capacity.High)
+    config = RouterViewModelConfig(capacity = Capacity.Custom(256))
 ) {
     val mainState = streamDataAsState<MainScreenData>(MainScreenData.Loading)
     
@@ -696,7 +711,7 @@ expect fun defaultRouterConfig(): RouterViewModelConfig
 
 // androidMain
 actual fun defaultRouterConfig() = RouterViewModelConfig(
-    capacity = Capacity.High,
+    capacity = Capacity.Custom(256),
     dispatcher = Dispatchers.Main.immediate
 )
 
@@ -805,7 +820,7 @@ class EffectHandlingViewModel : RouterViewModel(transformers) {
 class HighThroughputViewModel : RouterViewModel(
     transformers = heavyTransformers,
     config = RouterViewModelConfig(
-        capacity = Capacity.High,
+        capacity = Capacity.Custom(256),
         dispatcher = Dispatchers.Default
     )
 )

@@ -8,15 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Comprehensive documentation with practical examples
-- Complete API documentation for all core concepts
-- Step-by-step setup guide for Kotlin Multiplatform projects
-- Real-world examples using counter and components samples
+- `Transformer.configure { ... }` for class-friendly transformer composition.
+- `transformer { ... }` factory for simple anonymous transformer definitions.
+- Router global registration controls with `registerToGlobalRouter(...)` and duplicate global contract validation with `validateGlobalContracts(...)`.
+- Cross-router effect and query routing through the global router registry.
+- Comprehensive documentation with practical examples.
 
 ### Changed
-- Updated setup documentation to reflect Maven Central publication from version 1.6.0+
-- Improved testing documentation with correct TransmissionTest API
-- Enhanced documentation structure and navigation
+- Updated examples to use current `configure { ... }`, `TransmissionRouter { ... }`, `Capacity.Custom(...)`, and targeted `send(effect, identity)` APIs.
+- Removed obsolete examples that referenced non-existent builder, generic transformer, and capacity enum APIs.
+- Updated setup documentation to reflect Maven Central publication from version 1.6.0+.
+- Improved testing documentation with correct TransmissionTest API.
+- Enhanced documentation structure and navigation.
 
 ## [1.6.0] - 2025-05-16
 

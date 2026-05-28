@@ -192,7 +192,7 @@ val transmissionModule = module {
     single { 
         TransmissionRouter {
             addTransformerSet(get<Set<Transformer>>())
-            setCapacity(Capacity.High)
+            setCapacity(Capacity.Custom(256))
         }
     }
 }
@@ -322,7 +322,7 @@ class MainViewModel @Inject constructor(
 ) : RouterViewModel(
     loader = transformerSetLoader,
     config = RouterViewModelConfig(
-        capacity = Capacity.High,
+        capacity = Capacity.Custom(256),
         dispatcher = Dispatchers.IO
     )
 ) {
@@ -352,7 +352,7 @@ val androidTransmissionModule = module {
     // RouterViewModel configuration
     single { 
         RouterViewModelConfig(
-            capacity = Capacity.High,
+            capacity = Capacity.Custom(256),
             dispatcher = get(named("ioDispatcher"))
         )
     }

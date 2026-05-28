@@ -637,6 +637,31 @@ class TransmissionRouterTest {
     }
 
     @Test
+    fun `GIVEN duplicate local computation contracts WHEN router initializes THEN initialization should fail deterministically`() {
+        // Given
+        val computationContract = Contract.computation<String>()
+        val firstTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "first" }
+        }
+        val secondTransformer = Transformer(dispatcher = testDispatcher).configure {
+            computation(computationContract) { "second" }
+        }
+
+        // When
+        sut = TransmissionRouter(Contract.identity("duplicate-local-contract-router")) {
+            addTransformerSet(setOf(firstTransformer, secondTransformer))
+            addDispatcher(testDispatcher)
+        }
+
+        // Then
+        assertEquals(false, sut.isInitialized.value)
+        assertEquals(
+            "Duplicate local router contracts found for ${sut.routerName}: computation:${computationContract.key}",
+            sut.initializationError.value?.message,
+        )
+    }
+
+    @Test
     fun `GIVEN duplicate global computation contracts WHEN validation is enabled THEN second router should fail initialization`() {
         // Given
         val computationContract = Contract.computation<String>()

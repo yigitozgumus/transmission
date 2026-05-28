@@ -3,6 +3,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
+import com.trendyol.transmission.router.TransmissionRouteKey
 import kotlin.reflect.KClass
 
 typealias SignalLambda = TransmissionLambda<Transmission.Signal>
@@ -25,22 +26,32 @@ class HandlerRegistry internal constructor() {
         return signalRoutes.routeTypes()
     }
 
+    internal fun signalRouteKeys(): Set<TransmissionRouteKey> {
+        return signalRoutes.routeKeys()
+    }
+
     internal fun effectTypes(): Set<KClass<out Transmission.Effect>> {
         return effectRoutes.routeTypes()
+    }
+
+    internal fun effectRouteKeys(): Set<TransmissionRouteKey> {
+        return effectRoutes.routeKeys()
     }
 
     internal suspend fun dispatchSignal(
         scope: CommunicationScope,
         signal: Transmission.Signal,
+        routeKey: TransmissionRouteKey? = null,
     ) {
-        signalRoutes.dispatch(scope, signal)
+        signalRoutes.dispatch(scope, signal, routeKey)
     }
 
     internal suspend fun dispatchEffect(
         scope: CommunicationScope,
         effect: Transmission.Effect,
+        routeKey: TransmissionRouteKey? = null,
     ) {
-        effectRoutes.dispatch(scope, effect)
+        effectRoutes.dispatch(scope, effect, routeKey)
     }
 
     @PublishedApi
@@ -58,6 +69,22 @@ class HandlerRegistry internal constructor() {
     }
 
     @PublishedApi
+    internal fun <T : Transmission.Signal> signal(
+        routeKey: TransmissionRouteKey,
+        lambda: suspend CommunicationScope.(signal: T) -> Unit,
+    ) {
+        signalRoutes.register(routeKey, lambda as SignalLambda)
+    }
+
+    @PublishedApi
+    internal fun <T : Transmission.Signal> extendSignal(
+        routeKey: TransmissionRouteKey,
+        lambda: suspend CommunicationScope.(signal: T) -> Unit,
+    ) {
+        signalRoutes.extend(routeKey, lambda as SignalLambda)
+    }
+
+    @PublishedApi
     internal inline fun <reified T : Transmission.Effect> effect(
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
@@ -69,5 +96,21 @@ class HandlerRegistry internal constructor() {
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
         effectRoutes.extend(T::class, lambda as EffectLambda)
+    }
+
+    @PublishedApi
+    internal fun <T : Transmission.Effect> effect(
+        routeKey: TransmissionRouteKey,
+        lambda: suspend CommunicationScope.(effect: T) -> Unit,
+    ) {
+        effectRoutes.register(routeKey, lambda as EffectLambda)
+    }
+
+    @PublishedApi
+    internal fun <T : Transmission.Effect> extendEffect(
+        routeKey: TransmissionRouteKey,
+        lambda: suspend CommunicationScope.(effect: T) -> Unit,
+    ) {
+        effectRoutes.extend(routeKey, lambda as EffectLambda)
     }
 }

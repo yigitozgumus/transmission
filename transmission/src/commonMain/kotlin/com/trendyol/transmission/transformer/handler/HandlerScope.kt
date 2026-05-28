@@ -1,6 +1,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
+import com.trendyol.transmission.router.TransmissionRouteKey
 import com.trendyol.transmission.transformer.Transformer
 
 /**
@@ -113,6 +114,17 @@ inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
 }
 
 /**
+ * Registers an effect handler with an explicit, generated route key for non-reflective indexed routing.
+ */
+inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
+    routeKey: TransmissionRouteKey,
+    noinline lambda: suspend CommunicationScope.(effect: T) -> Unit,
+) {
+    handlerRegistry.effect<T>(lambda)
+    handlerRegistry.effect(routeKey, lambda)
+}
+
+/**
  * Registers a handler for signals of type [T].
  * 
  * The handler lambda will be invoked whenever a signal of the specified type is processed
@@ -144,4 +156,15 @@ inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
     noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
 ) {
     handlerRegistry.signal<T>(lambda)
+}
+
+/**
+ * Registers a signal handler with an explicit, generated route key for non-reflective indexed routing.
+ */
+inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
+    routeKey: TransmissionRouteKey,
+    noinline lambda: suspend CommunicationScope.(signal: T) -> Unit,
+) {
+    handlerRegistry.signal<T>(lambda)
+    handlerRegistry.signal(routeKey, lambda)
 }

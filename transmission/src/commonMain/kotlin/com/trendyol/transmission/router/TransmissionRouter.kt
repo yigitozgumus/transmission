@@ -83,6 +83,7 @@ class TransmissionRouter internal constructor(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val registerToGlobalRouter: Boolean = true,
     private val validateGlobalContracts: Boolean = false,
+    private val routeResolvers: List<TransmissionRouteResolver> = emptyList(),
 ): StreamOwner {
 
     internal companion object {
@@ -98,7 +99,9 @@ class TransmissionRouter internal constructor(
     private val signalInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Signal>>> = mutableMapOf()
     private val effectInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Effect>>> = mutableMapOf()
     private var signalRoutes: Map<KClass<out Transmission.Signal>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
+    private var signalKeyRoutes: Map<TransmissionRouteKey, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
     private var effectRoutes: Map<KClass<out Transmission.Effect>, List<Transformer>> = emptyMap()
+    private var effectKeyRoutes: Map<TransmissionRouteKey, List<Transformer>> = emptyMap()
     private var effectRoutingJob: Job? = null
 
     internal val routerName: String = identity.key
@@ -333,23 +336,37 @@ class TransmissionRouter internal constructor(
                 transformer.handlerRegistry.signalTypes().map { type -> type to signalInputs.getValue(transformer) }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+        signalKeyRoutes = transformerSet
+            .flatMap { transformer ->
+                transformer.handlerRegistry.signalRouteKeys().map { routeKey -> routeKey to signalInputs.getValue(transformer) }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
         effectRoutes = transformerSet
             .flatMap { transformer ->
                 transformer.handlerRegistry.effectTypes().map { type -> type to transformer }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+        effectKeyRoutes = transformerSet
+            .flatMap { transformer ->
+                transformer.handlerRegistry.effectRouteKeys().map { routeKey -> routeKey to transformer }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
     }
 
     private suspend fun routeSignal(envelope: TransmissionEnvelope<Transmission.Signal>) {
-        signalRoutes[envelope.payload::class].orEmpty().forEach { input ->
-            input.send(envelope)
+        val routeKey = routeKeyOf(envelope.payload)
+        val routedEnvelope = envelope.copy(routeKey = routeKey)
+        val inputs = routeKey?.let { signalKeyRoutes[it] } ?: signalRoutes[envelope.payload::class].orEmpty()
+        inputs.orEmpty().forEach { input ->
+            input.send(routedEnvelope)
         }
     }
 
     private fun tryRouteSignal(envelope: TransmissionEnvelope<Transmission.Signal>): Boolean {
-        return signalRoutes[envelope.payload::class]
-            .orEmpty()
-            .all { input -> input.trySend(envelope).isSuccess }
+        val routeKey = routeKeyOf(envelope.payload)
+        val routedEnvelope = envelope.copy(routeKey = routeKey)
+        val inputs = routeKey?.let { signalKeyRoutes[it] } ?: signalRoutes[envelope.payload::class].orEmpty()
+        return inputs.orEmpty().all { input -> input.trySend(routedEnvelope).isSuccess }
     }
 
     private fun startEffectRouter() {
@@ -362,13 +379,19 @@ class TransmissionRouter internal constructor(
     }
 
     private suspend fun routeEffect(envelope: TransmissionEnvelope<Transmission.Effect>) {
-        effectRoutes[envelope.payload::class]
-            .orEmpty()
+        val routeKey = routeKeyOf(envelope.payload)
+        val routedEnvelope = envelope.copy(routeKey = routeKey)
+        val transformers = routeKey?.let { effectKeyRoutes[it] } ?: effectRoutes[envelope.payload::class].orEmpty()
+        transformers.orEmpty()
             .asSequence()
             .filter { transformer -> envelope.target == null || envelope.target == transformer.identity }
             .forEach { transformer ->
-                effectInputs.getValue(transformer).send(envelope)
+                effectInputs.getValue(transformer).send(routedEnvelope)
             }
+    }
+
+    private fun routeKeyOf(transmission: Transmission): TransmissionRouteKey? {
+        return routeResolvers.firstNotNullOfOrNull { resolver -> resolver.keyOf(transmission) }
     }
 
     private fun startGlobalEffectBridge() {

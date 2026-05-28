@@ -1,5 +1,6 @@
 package com.trendyol.transmission.components
 
+import com.trendyol.transmission.components.colorpicker.ColorPickerEffectRoutes
 import com.trendyol.transmission.components.colorpicker.ColorPickerTransformer
 import com.trendyol.transmission.components.input.InputTransformer
 import com.trendyol.transmission.components.multioutput.MultiOutputTransformer
@@ -42,6 +43,7 @@ val featuresModule = module {
         TransmissionRouter {
             addTransformerSet(get<List<Transformer>>().toSet())
             addDispatcher(get(named("DefaultDispatcher")))
+            addRouteResolver(ColorPickerEffectRoutes)
         }
     }
 }

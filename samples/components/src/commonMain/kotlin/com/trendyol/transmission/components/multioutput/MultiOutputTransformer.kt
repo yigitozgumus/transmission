@@ -2,6 +2,7 @@ package com.trendyol.transmission.components.multioutput
 
 import com.trendyol.transmission.components.MultiOutputUiState
 import com.trendyol.transmission.components.colorpicker.ColorPickerEffect
+import com.trendyol.transmission.components.colorpicker.ColorPickerEffectRoutes
 import com.trendyol.transmission.components.input.InputEffect
 import com.trendyol.transmission.components.output.OutputTransformer
 import com.trendyol.transmission.transformer.Transformer
@@ -27,10 +28,10 @@ class MultiOutputTransformer constructor(
                     it.copy(writtenUppercaseText = it.writtenUppercaseText + " ${result?.result}")
                 }
             }
-            onEffect<ColorPickerEffect.BackgroundColorUpdate> { effect ->
+            onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect: ColorPickerEffect.BackgroundColorUpdate ->
                 holder.update { it.copy(backgroundColor = effect.color) }
             }
-            onEffect<ColorPickerEffect.SelectedColorUpdate> { effect ->
+            onEffect(ColorPickerEffectRoutes.SelectedColorUpdate) { effect: ColorPickerEffect.SelectedColorUpdate ->
                 holder.update { it.copy(selectedColor = effect.color) }
             }
         }

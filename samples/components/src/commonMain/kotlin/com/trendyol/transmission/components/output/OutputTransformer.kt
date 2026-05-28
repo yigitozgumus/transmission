@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import com.trendyol.transmission.components.ColorPickerUiState
 import com.trendyol.transmission.components.OutputUiState
 import com.trendyol.transmission.components.colorpicker.ColorPickerEffect
+import com.trendyol.transmission.components.colorpicker.ColorPickerEffectRoutes
 import com.trendyol.transmission.components.colorpicker.ColorPickerTransformer
 import com.trendyol.transmission.components.colorpicker.colorPickerIdentity
 import com.trendyol.transmission.components.input.InputEffect
@@ -81,7 +82,7 @@ class OutputTransformer(
             execute(outputExecutionContract)
             publish(effect = RouterEffect(holder.getValue()))
         }
-        onEffect<ColorPickerEffect.BackgroundColorUpdate> { effect ->
+        onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect: ColorPickerEffect.BackgroundColorUpdate ->
             holder.update { it.copy(backgroundColor = effect.color) }
         }
     }

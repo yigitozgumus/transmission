@@ -23,6 +23,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "transmission"
 include(":transmission")
+include(":transmission-route-processor")
 include(":transmission-test")
 include(":transmission-viewmodel")
 include(":samples:components")

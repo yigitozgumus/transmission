@@ -3,6 +3,7 @@ package com.trendyol.transmission.router.builder
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.router.Capacity
 import com.trendyol.transmission.router.GlobalTransmissionRouter
+import com.trendyol.transmission.router.TransmissionRouteResolver
 import com.trendyol.transmission.router.TransmissionRouter
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
@@ -113,6 +114,11 @@ interface TransmissionRouterBuilderScope {
      * Disabled by default to preserve existing first-owner-wins behavior for global query routing.
      */
     fun validateGlobalContracts(enabled: Boolean = true)
+
+    /**
+     * Adds a generated or explicit route resolver for non-reflective signal/effect routing.
+     */
+    fun addRouteResolver(resolver: TransmissionRouteResolver)
 
     /**
      * Disables automatic initialization of the [TransmissionRouter].

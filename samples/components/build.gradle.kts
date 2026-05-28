@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.ksp)
     id("com.trendyol.transmission.android.application")
     id("com.trendyol.transmission.kotlin.multiplatform")
 }
@@ -17,6 +18,9 @@ kotlin {
     sourceSets {
         applyDefaultHierarchyTemplate()
         val desktopMain by getting
+        commonMain {
+            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
+        }
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
@@ -52,6 +56,9 @@ kotlin {
     }
 }
 
+dependencies {
+    add("kspCommonMainMetadata", project(":transmission-route-processor"))
+}
 
 compose.desktop {
     application {

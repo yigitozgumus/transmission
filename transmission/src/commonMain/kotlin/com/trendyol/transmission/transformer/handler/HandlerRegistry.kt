@@ -3,6 +3,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
+import kotlin.reflect.KClass
 
 typealias SignalLambda = TransmissionLambda<Transmission.Signal>
 typealias EffectLambda = TransmissionLambda<Transmission.Effect>
@@ -18,6 +19,14 @@ class HandlerRegistry internal constructor() {
     internal fun clear() {
         signalRoutes.clear()
         effectRoutes.clear()
+    }
+
+    internal fun signalTypes(): Set<KClass<out Transmission.Signal>> {
+        return signalRoutes.routeTypes()
+    }
+
+    internal fun effectTypes(): Set<KClass<out Transmission.Effect>> {
+        return effectRoutes.routeTypes()
     }
 
     internal suspend fun dispatchSignal(

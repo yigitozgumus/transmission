@@ -11,6 +11,10 @@ internal class RouteRegistry<T : Transmission> {
         routes.clear()
     }
 
+    fun routeTypes(): Set<KClass<out T>> {
+        return routes.keys
+    }
+
     @PublishedApi
     internal fun register(type: KClass<out T>, lambda: TransmissionLambda<T>) {
         routes[type] = StackedLambda<T>().also { it.addOperation(lambda) }

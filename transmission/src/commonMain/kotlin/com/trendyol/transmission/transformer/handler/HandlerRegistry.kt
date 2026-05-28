@@ -26,7 +26,7 @@ class HandlerRegistry internal constructor() {
         return signalRoutes.routeTypes()
     }
 
-    internal fun signalRouteKeys(): Set<TransmissionRouteKey> {
+    internal fun signalRouteKeys(): Set<TransmissionRouteKey<*>> {
         return signalRoutes.routeKeys()
     }
 
@@ -34,14 +34,14 @@ class HandlerRegistry internal constructor() {
         return effectRoutes.routeTypes()
     }
 
-    internal fun effectRouteKeys(): Set<TransmissionRouteKey> {
+    internal fun effectRouteKeys(): Set<TransmissionRouteKey<*>> {
         return effectRoutes.routeKeys()
     }
 
     internal suspend fun dispatchSignal(
         scope: CommunicationScope,
         signal: Transmission.Signal,
-        routeKey: TransmissionRouteKey? = null,
+        routeKey: TransmissionRouteKey<*>? = null,
     ) {
         signalRoutes.dispatch(scope, signal, routeKey)
     }
@@ -49,7 +49,7 @@ class HandlerRegistry internal constructor() {
     internal suspend fun dispatchEffect(
         scope: CommunicationScope,
         effect: Transmission.Effect,
-        routeKey: TransmissionRouteKey? = null,
+        routeKey: TransmissionRouteKey<*>? = null,
     ) {
         effectRoutes.dispatch(scope, effect, routeKey)
     }
@@ -70,7 +70,7 @@ class HandlerRegistry internal constructor() {
 
     @PublishedApi
     internal fun <T : Transmission.Signal> signal(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         lambda: suspend CommunicationScope.(signal: T) -> Unit,
     ) {
         signalRoutes.register(routeKey, lambda as SignalLambda)
@@ -78,7 +78,7 @@ class HandlerRegistry internal constructor() {
 
     @PublishedApi
     internal fun <T : Transmission.Signal> extendSignal(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         lambda: suspend CommunicationScope.(signal: T) -> Unit,
     ) {
         signalRoutes.extend(routeKey, lambda as SignalLambda)
@@ -100,7 +100,7 @@ class HandlerRegistry internal constructor() {
 
     @PublishedApi
     internal fun <T : Transmission.Effect> effect(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         lambda: suspend CommunicationScope.(effect: T) -> Unit,
     ) {
         effectRoutes.register(routeKey, lambda as EffectLambda)
@@ -108,7 +108,7 @@ class HandlerRegistry internal constructor() {
 
     @PublishedApi
     internal fun <T : Transmission.Effect> extendEffect(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         lambda: suspend CommunicationScope.(effect: T) -> Unit,
     ) {
         effectRoutes.extend(routeKey, lambda as EffectLambda)

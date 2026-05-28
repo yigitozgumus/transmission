@@ -72,10 +72,10 @@ private class TransmissionRouteProcessor(
             subclasses.forEach { subclass ->
                 val propertyName = subclass.routePropertyName()
                 val routeValue = "${root.qualifiedName!!.asString()}.${subclass.qualifiedName!!.asString().substringAfterLast('.')}"
-                writer.appendLine("    public val $propertyName: TransmissionRouteKey = TransmissionRouteKey(\"$routeValue\")")
+                writer.appendLine("    public val $propertyName: TransmissionRouteKey<${subclass.qualifiedName!!.asString()}> = TransmissionRouteKey(\"$routeValue\")")
             }
             writer.appendLine()
-            writer.appendLine("    override fun keyOf(transmission: Transmission): TransmissionRouteKey? {")
+            writer.appendLine("    override fun keyOf(transmission: Transmission): TransmissionRouteKey<*>? {")
             writer.appendLine("        return when (transmission) {")
             subclasses.forEach { subclass ->
                 writer.appendLine("            is ${subclass.qualifiedName!!.asString()} -> ${subclass.routePropertyName()}")

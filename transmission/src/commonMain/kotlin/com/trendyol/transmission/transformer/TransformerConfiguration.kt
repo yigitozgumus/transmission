@@ -116,7 +116,7 @@ class TransformerConfigurationScope @PublishedApi internal constructor(
 
     /** Appends an effect handler with a generated or explicit route key. */
     inline fun <reified T : Transmission.Effect> onEffect(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit,
     ) {
         transformer.addHandlers {
@@ -126,7 +126,7 @@ class TransformerConfigurationScope @PublishedApi internal constructor(
 
     /** Appends a signal handler with a generated or explicit route key. */
     inline fun <reified T : Transmission.Signal> onSignal(
-        routeKey: TransmissionRouteKey,
+        routeKey: TransmissionRouteKey<T>,
         noinline lambda: suspend CommunicationScope.(signal: T) -> Unit,
     ) {
         transformer.addHandlers {

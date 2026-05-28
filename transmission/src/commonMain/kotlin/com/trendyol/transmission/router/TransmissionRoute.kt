@@ -7,13 +7,13 @@ import kotlin.jvm.JvmInline
  * Stable, generated-or-explicit route identifier used for non-reflective signal/effect routing.
  */
 @JvmInline
-value class TransmissionRouteKey(val value: String)
+value class TransmissionRouteKey<out T : Transmission>(val value: String)
 
 /**
  * Resolves route keys for generated or explicitly keyed transmissions without runtime type reflection.
  */
 fun interface TransmissionRouteResolver {
-    fun keyOf(transmission: Transmission): TransmissionRouteKey?
+    fun keyOf(transmission: Transmission): TransmissionRouteKey<*>?
 }
 
 /**

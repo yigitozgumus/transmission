@@ -82,7 +82,7 @@ class OutputTransformer(
             execute(outputExecutionContract)
             publish(effect = RouterEffect(holder.getValue()))
         }
-        onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect: ColorPickerEffect.BackgroundColorUpdate ->
+        onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect ->
             holder.update { it.copy(backgroundColor = effect.color) }
         }
     }

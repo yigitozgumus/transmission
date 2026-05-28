@@ -28,10 +28,10 @@ class MultiOutputTransformer constructor(
                     it.copy(writtenUppercaseText = it.writtenUppercaseText + " ${result?.result}")
                 }
             }
-            onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect: ColorPickerEffect.BackgroundColorUpdate ->
+            onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect ->
                 holder.update { it.copy(backgroundColor = effect.color) }
             }
-            onEffect(ColorPickerEffectRoutes.SelectedColorUpdate) { effect: ColorPickerEffect.SelectedColorUpdate ->
+            onEffect(ColorPickerEffectRoutes.SelectedColorUpdate) { effect ->
                 holder.update { it.copy(selectedColor = effect.color) }
             }
         }

@@ -117,7 +117,7 @@ inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
  * Registers an effect handler with an explicit, generated route key for non-reflective indexed routing.
  */
 inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     noinline lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
     handlerRegistry.effect<T>(lambda)
@@ -162,7 +162,7 @@ inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
  * Registers a signal handler with an explicit, generated route key for non-reflective indexed routing.
  */
 inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     noinline lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
     handlerRegistry.signal<T>(lambda)

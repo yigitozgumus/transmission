@@ -21,7 +21,7 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.extendEffect(
 }
 
 fun <T : Transmission.Effect> UpdateHandlerScope.extendEffect(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
     handlerRegistry.extendEffect(routeKey, lambda)
@@ -34,7 +34,7 @@ inline fun <reified T : Transmission.Signal> UpdateHandlerScope.extendSignal(
 }
 
 fun <T : Transmission.Signal> UpdateHandlerScope.extendSignal(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
     handlerRegistry.extendSignal(routeKey, lambda)
@@ -47,7 +47,7 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
 }
 
 fun <T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
     handlerRegistry.effect(routeKey, lambda)
@@ -60,7 +60,7 @@ inline fun <reified T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
 }
 
 fun <T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
-    routeKey: TransmissionRouteKey,
+    routeKey: TransmissionRouteKey<T>,
     lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
     handlerRegistry.signal(routeKey, lambda)

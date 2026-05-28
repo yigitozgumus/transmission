@@ -99,9 +99,9 @@ class TransmissionRouter internal constructor(
     private val signalInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Signal>>> = mutableMapOf()
     private val effectInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Effect>>> = mutableMapOf()
     private var signalRoutes: Map<KClass<out Transmission.Signal>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
-    private var signalKeyRoutes: Map<TransmissionRouteKey, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
+    private var signalKeyRoutes: Map<TransmissionRouteKey<*>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
     private var effectRoutes: Map<KClass<out Transmission.Effect>, List<Transformer>> = emptyMap()
-    private var effectKeyRoutes: Map<TransmissionRouteKey, List<Transformer>> = emptyMap()
+    private var effectKeyRoutes: Map<TransmissionRouteKey<*>, List<Transformer>> = emptyMap()
     private var effectRoutingJob: Job? = null
 
     internal val routerName: String = identity.key
@@ -390,7 +390,7 @@ class TransmissionRouter internal constructor(
             }
     }
 
-    private fun routeKeyOf(transmission: Transmission): TransmissionRouteKey? {
+    private fun routeKeyOf(transmission: Transmission): TransmissionRouteKey<*>? {
         return routeResolvers.firstNotNullOfOrNull { resolver -> resolver.keyOf(transmission) }
     }
 

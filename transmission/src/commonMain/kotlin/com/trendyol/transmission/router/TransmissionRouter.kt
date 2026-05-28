@@ -213,8 +213,24 @@ class TransmissionRouter internal constructor(
      */
     fun process(signal: Transmission.Signal) {
         routerScope.launch {
-            routeSignal(TransmissionEnvelope(payload = signal))
+            send(signal)
         }
+    }
+
+    /**
+     * Sends a [Transmission.Signal] without launching an extra coroutine.
+     * This is useful for hot paths that already run inside a coroutine.
+     */
+    suspend fun send(signal: Transmission.Signal) {
+        routeSignal(TransmissionEnvelope(payload = signal))
+    }
+
+    /**
+     * Attempts to enqueue a [Transmission.Signal] without suspension.
+     * Returns false if any matching transformer input is full or closed.
+     */
+    fun tryProcess(signal: Transmission.Signal): Boolean {
+        return tryRouteSignal(TransmissionEnvelope(payload = signal))
     }
 
     /**
@@ -240,8 +256,24 @@ class TransmissionRouter internal constructor(
      */
     fun process(effect: Transmission.Effect) {
         routerScope.launch {
-            transmissionBus.send(effect)
+            send(effect)
         }
+    }
+
+    /**
+     * Sends a [Transmission.Effect] without launching an extra coroutine.
+     * This is useful for hot paths that already run inside a coroutine.
+     */
+    suspend fun send(effect: Transmission.Effect) {
+        transmissionBus.send(effect)
+    }
+
+    /**
+     * Attempts to enqueue a [Transmission.Effect] without suspension.
+     * Returns false when the router effect bus is full or closed.
+     */
+    fun tryProcess(effect: Transmission.Effect): Boolean {
+        return transmissionBus.trySend(effect)
     }
 
     private fun initializeInternal(transformerSetLoader: TransformerSetLoader?): Job {
@@ -312,6 +344,12 @@ class TransmissionRouter internal constructor(
         signalRoutes[envelope.payload::class].orEmpty().forEach { input ->
             input.send(envelope)
         }
+    }
+
+    private fun tryRouteSignal(envelope: TransmissionEnvelope<Transmission.Signal>): Boolean {
+        return signalRoutes[envelope.payload::class]
+            .orEmpty()
+            .all { input -> input.trySend(envelope).isSuccess }
     }
 
     private fun startEffectRouter() {

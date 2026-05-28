@@ -42,8 +42,16 @@ internal class TransmissionBus(
         effectBroadcast.producer.send(TransmissionEnvelope(payload = effect))
     }
 
+    fun trySend(effect: Transmission.Effect): Boolean {
+        return effectBroadcast.producer.trySend(TransmissionEnvelope(payload = effect)).isSuccess
+    }
+
     suspend fun send(envelope: TransmissionEnvelope<Transmission.Effect>) {
         effectBroadcast.producer.send(envelope)
+    }
+
+    fun trySend(envelope: TransmissionEnvelope<Transmission.Effect>): Boolean {
+        return effectBroadcast.producer.trySend(envelope).isSuccess
     }
 
     fun effectsFor(identity: Contract.Identity): Flow<TransmissionEnvelope<Transmission.Effect>> {

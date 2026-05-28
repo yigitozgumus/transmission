@@ -55,5 +55,6 @@ fun TransmissionRouter(
         autoInitialization = builder.autoInitialization,
         capacity = builder.capacity,
         dispatcher = builder.dispatcher,
+        registerToGlobalRouter = builder.registerToGlobalRouter,
     )
 }

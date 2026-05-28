@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -74,6 +75,7 @@ class TransmissionRouter internal constructor(
     internal val autoInitialization: Boolean = true,
     internal val capacity: Capacity = Capacity.Default,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val registerToGlobalRouter: Boolean = true,
 ): StreamOwner {
 
     internal companion object {
@@ -88,6 +90,8 @@ class TransmissionRouter internal constructor(
     internal val transformerSet: Set<Transformer> = _transformerSet
 
     internal val routerName: String = identity.key
+
+    private var globalEffectBridgeJob: Job? = null
 
     private val _isInitialized = MutableStateFlow(false)
     private val _initializationError = MutableStateFlow<Throwable?>(null)
@@ -133,6 +137,10 @@ class TransmissionRouter internal constructor(
     val queryHelper: QueryHandler = _queryManager.handler
 
     init {
+        if (registerToGlobalRouter) {
+            GlobalTransmissionRouter.register(this)
+            startGlobalEffectBridge()
+        }
         if (autoInitialization) {
             initializeInternal(transformerSetLoader)
         }
@@ -260,6 +268,29 @@ class TransmissionRouter internal constructor(
         _isInitialized.update { true }
     }
 
+    private fun startGlobalEffectBridge() {
+        globalEffectBridgeJob = routerScope.launch {
+            transmissionBus.effectStream.collect { envelope ->
+                if (envelope.originRouter == null || envelope.originRouter == routerName) {
+                    GlobalTransmissionRouter.publishEffect(
+                        sourceRouter = this@TransmissionRouter,
+                        envelope = envelope,
+                    )
+                }
+            }
+        }
+    }
+
+    internal fun receiveGlobalEffect(envelope: TransmissionEnvelope<Transmission.Effect>) {
+        routerScope.launch {
+            transmissionBus.send(envelope)
+        }
+    }
+
+    internal fun containsTransformer(identity: Contract.Identity): Boolean {
+        return transformerSet.any { transformer -> transformer.identity == identity }
+    }
+
     /**
      * Clears the router and all its transformers, releasing all resources.
      * 
@@ -283,6 +314,10 @@ class TransmissionRouter internal constructor(
      * @see Transformer.clear
      */
     fun clear() {
+        if (registerToGlobalRouter) {
+            GlobalTransmissionRouter.unregister(this)
+        }
+        globalEffectBridgeJob?.cancel()
         transformerSet.forEach { it.clear() }
         routerScope.cancel()
     }

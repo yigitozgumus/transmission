@@ -2,6 +2,7 @@ package com.trendyol.transmission.router.builder
 
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.router.Capacity
+import com.trendyol.transmission.router.GlobalTransmissionRouter
 import com.trendyol.transmission.router.TransmissionRouter
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
@@ -96,6 +97,14 @@ interface TransmissionRouterBuilderScope {
      * @see overrideInitialization for manual initialization
      */
     fun addLoader(loader: TransformerSetLoader)
+
+    /**
+     * Controls whether this router registers itself to [GlobalTransmissionRouter].
+     *
+     * Registration is enabled by default, allowing multiple routers to react to each other's effects.
+     * Disable this for routers that must remain local-only.
+     */
+    fun registerToGlobalRouter(enabled: Boolean = true)
 
     /**
      * Disables automatic initialization of the [TransmissionRouter].

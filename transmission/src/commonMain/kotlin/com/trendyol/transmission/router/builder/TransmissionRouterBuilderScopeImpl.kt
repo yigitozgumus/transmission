@@ -14,6 +14,7 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
     internal var dispatcher: CoroutineDispatcher = Dispatchers.Default
     internal var transformerSetLoader: TransformerSetLoader? = null
     internal var autoInitialization: Boolean = true
+    internal var registerToGlobalRouter: Boolean = true
     internal var capacity: Capacity = Capacity.Default
 
     private val scopeImpl = object : TransmissionRouterBuilderScope {
@@ -40,6 +41,10 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
 
         override fun addLoader(loader: TransformerSetLoader) {
             this@TransmissionRouterBuilderScopeImpl.transformerSetLoader = loader
+        }
+
+        override fun registerToGlobalRouter(enabled: Boolean) {
+            this@TransmissionRouterBuilderScopeImpl.registerToGlobalRouter = enabled
         }
 
         override fun overrideInitialization() {

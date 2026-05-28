@@ -101,6 +101,8 @@ open class Transformer(
 
     private val effectChannel: Channel<TransmissionEnvelope<Transmission.Effect>> = Channel(capacity = capacity.value)
     internal val dataChannel: Channel<TransmissionEnvelope<Transmission.Data>> = Channel(capacity = capacity.value)
+    private val processingQueue: Channel<suspend () -> Unit> = Channel(capacity = capacity.value)
+    private var processingQueueStarted = false
 
     internal val dataEmissionInitialized = MutableStateFlow(false)
 
@@ -213,15 +215,32 @@ open class Transformer(
         checkpointProvider = { tracker }
     }
 
+    private fun startProcessingQueue() {
+        if (processingQueueStarted) return
+        processingQueueStarted = true
+        transformerScope.launch {
+            for (process in processingQueue) {
+                process()
+            }
+        }
+    }
+
     internal fun startSignalCollection(incoming: Flow<TransmissionEnvelope<Transmission.Signal>>) {
+        startProcessingQueue()
         transformerScope.launch {
             incoming.collect { envelope ->
                 val signal = envelope.payload
-                currentSignalProcessing = transformerScope.launch {
-                    handlerRegistry.dispatchSignal(
-                        communicationScope,
-                        signal,
-                    )
+                processingQueue.send {
+                    val processing = Job()
+                    currentSignalProcessing = processing
+                    try {
+                        handlerRegistry.dispatchSignal(
+                            communicationScope,
+                            signal,
+                        )
+                    } finally {
+                        processing.complete()
+                    }
                 }
             }
         }
@@ -244,6 +263,7 @@ open class Transformer(
         producer: SendChannel<TransmissionEnvelope<Transmission.Effect>>,
         incoming: Flow<TransmissionEnvelope<Transmission.Effect>>
     ) {
+        startProcessingQueue()
         transformerScope.launch {
             supervisorScope {
                 launch {
@@ -252,11 +272,17 @@ open class Transformer(
                         .filterNot { it.payload is RouterEffectWithType<*> }
                         .map { it.payload }
                         .collect { effect ->
-                            currentEffectProcessing = launch {
-                                handlerRegistry.dispatchEffect(
-                                    communicationScope,
-                                    effect,
-                                )
+                            processingQueue.send {
+                                val processing = Job()
+                                currentEffectProcessing = processing
+                                try {
+                                    handlerRegistry.dispatchEffect(
+                                        communicationScope,
+                                        effect,
+                                    )
+                                } finally {
+                                    processing.complete()
+                                }
                             }
                         }
                 }

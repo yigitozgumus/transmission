@@ -149,7 +149,7 @@ internal class TransformerQueryDelegate(
             outGoingQuery.send(
                 QueryType.Data(
                     sender = identity.key,
-                    key = contract.key,
+                    contract = contract,
                     queryIdentifier = queryIdentifier
                 )
             )
@@ -165,7 +165,7 @@ internal class TransformerQueryDelegate(
             outGoingQuery.send(
                 QueryType.Computation(
                     sender = identity.key,
-                    key = contract.key,
+                    contract = contract,
                     invalidate = invalidate,
                     queryIdentifier = queryIdentifier
                 )
@@ -182,7 +182,7 @@ internal class TransformerQueryDelegate(
             outGoingQuery.send(
                 QueryType.ComputationWithArgs(
                     sender = identity.key,
-                    key = contract.key,
+                    contract = contract,
                     args = args,
                     invalidate = invalidate,
                     queryIdentifier = queryIdentifier
@@ -195,7 +195,7 @@ internal class TransformerQueryDelegate(
 
         override suspend fun execute(contract: Contract.Execution) {
             outGoingQuery.send(
-                QueryType.Execution(key = contract.key)
+                QueryType.Execution(contract = contract)
             )
         }
 
@@ -203,7 +203,7 @@ internal class TransformerQueryDelegate(
             contract: Contract.ExecutionWithArgs<A>, args: A
         ) {
             outGoingQuery.send(
-                QueryType.ExecutionWithArgs(key = contract.key, args = args)
+                QueryType.ExecutionWithArgs(contract = contract, args = args)
             )
         }
     }

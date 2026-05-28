@@ -315,7 +315,7 @@ open class Transformer(
                     incomingQuery
                         .filter { it.owner == _identity.key }
                         .collect {
-                            this@Transformer.requestDelegate.resultBroadcast.producer.send(it)
+                            this@Transformer.requestDelegate.receiveQueryResult(it)
                         }
                 }
                 launch {

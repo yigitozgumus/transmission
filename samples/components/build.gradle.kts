@@ -57,7 +57,18 @@ kotlin {
 }
 
 dependencies {
-    add("kspCommonMainMetadata", project(":transmission-route-processor"))
+    add("kspCommonMainMetadata", project(":transmission-id-processor"))
+}
+
+// Wire KSP metadata generation before any target compilation so generated code is available
+tasks.matching { task ->
+    task.name.contains("Kotlin", ignoreCase = false) &&
+        task.name.startsWith("compile") &&
+        !task.name.contains("Metadata", ignoreCase = true) &&
+        !task.name.contains("check", ignoreCase = true) &&
+        !task.name.contains("Test", ignoreCase = true)
+}.configureEach {
+    dependsOn(tasks.named("kspCommonMainKotlinMetadata"))
 }
 
 compose.desktop {

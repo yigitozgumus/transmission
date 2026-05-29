@@ -44,7 +44,7 @@ router.streamData<CounterData>().collect { data ->
 - **Effects**: asynchronous messages between transformers. Effects can be broadcast with `publish(effect)` or targeted with `send(effect, identity)`.
 - **Data**: output values observed from router streams.
 - **Transformers**: business-logic units that handle signals/effects, update data holders, and expose computations or executions.
-- **TransmissionRouter**: coordinates transformers, streams data/effects, and routes queries.
+- **TransmissionRouter**: coordinates transformers, streams data/effects, and ids queries.
 - **Contracts**: typed keys for identities, data holders, computations, executions, and checkpoints.
 
 ## Documentation

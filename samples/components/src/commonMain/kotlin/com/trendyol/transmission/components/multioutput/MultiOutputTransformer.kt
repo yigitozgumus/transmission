@@ -1,8 +1,7 @@
 package com.trendyol.transmission.components.multioutput
 
 import com.trendyol.transmission.components.MultiOutputUiState
-import com.trendyol.transmission.components.colorpicker.ColorPickerEffect
-import com.trendyol.transmission.components.colorpicker.ColorPickerEffectRoutes
+import com.trendyol.transmission.components.colorpicker.ColorPickerEffectId
 import com.trendyol.transmission.components.input.InputEffect
 import com.trendyol.transmission.components.output.OutputTransformer
 import com.trendyol.transmission.transformer.Transformer
@@ -13,7 +12,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 
 val multiOutputTransformerIdentity = Contract.identity()
 
-class MultiOutputTransformer constructor(
+class MultiOutputTransformer(
     private val defaultDispatcher: CoroutineDispatcher
 ) : Transformer(multiOutputTransformerIdentity, defaultDispatcher) {
 
@@ -28,10 +27,10 @@ class MultiOutputTransformer constructor(
                     it.copy(writtenUppercaseText = it.writtenUppercaseText + " ${result?.result}")
                 }
             }
-            onEffect(ColorPickerEffectRoutes.BackgroundColorUpdate) { effect ->
+            onEffect(ColorPickerEffectId.BackgroundColorUpdate) { effect ->
                 holder.update { it.copy(backgroundColor = effect.color) }
             }
-            onEffect(ColorPickerEffectRoutes.SelectedColorUpdate) { effect ->
+            onEffect(ColorPickerEffectId.SelectedColorUpdate) { effect ->
                 holder.update { it.copy(selectedColor = effect.color) }
             }
         }

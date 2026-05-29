@@ -3,7 +3,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
-import com.trendyol.transmission.router.TransmissionRouteKey
+import com.trendyol.transmission.router.TransmissionId
 import kotlin.reflect.KClass
 
 typealias SignalLambda = TransmissionLambda<Transmission.Signal>
@@ -12,105 +12,105 @@ typealias EffectLambda = TransmissionLambda<Transmission.Effect>
 class HandlerRegistry internal constructor() {
 
     @PublishedApi
-    internal val signalRoutes = RouteRegistry<Transmission.Signal>()
+    internal val signalRegistry = RouteRegistry<Transmission.Signal>()
 
     @PublishedApi
-    internal val effectRoutes = RouteRegistry<Transmission.Effect>()
+    internal val effectRegistry = RouteRegistry<Transmission.Effect>()
 
     internal fun clear() {
-        signalRoutes.clear()
-        effectRoutes.clear()
+        signalRegistry.clear()
+        effectRegistry.clear()
     }
 
     internal fun signalTypes(): Set<KClass<out Transmission.Signal>> {
-        return signalRoutes.routeTypes()
+        return signalRegistry.registeredTypes()
     }
 
-    internal fun signalRouteKeys(): Set<TransmissionRouteKey<*>> {
-        return signalRoutes.routeKeys()
+    internal fun signalTransmissionIds(): Set<TransmissionId<*>> {
+        return signalRegistry.transmissionIds()
     }
 
     internal fun effectTypes(): Set<KClass<out Transmission.Effect>> {
-        return effectRoutes.routeTypes()
+        return effectRegistry.registeredTypes()
     }
 
-    internal fun effectRouteKeys(): Set<TransmissionRouteKey<*>> {
-        return effectRoutes.routeKeys()
+    internal fun effectTransmissionIds(): Set<TransmissionId<*>> {
+        return effectRegistry.transmissionIds()
     }
 
     internal suspend fun dispatchSignal(
         scope: CommunicationScope,
         signal: Transmission.Signal,
-        routeKey: TransmissionRouteKey<*>? = null,
+        transmissionId: TransmissionId<*>? = null,
     ) {
-        signalRoutes.dispatch(scope, signal, routeKey)
+        signalRegistry.dispatch(scope, signal, transmissionId)
     }
 
     internal suspend fun dispatchEffect(
         scope: CommunicationScope,
         effect: Transmission.Effect,
-        routeKey: TransmissionRouteKey<*>? = null,
+        transmissionId: TransmissionId<*>? = null,
     ) {
-        effectRoutes.dispatch(scope, effect, routeKey)
+        effectRegistry.dispatch(scope, effect, transmissionId)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Signal> signal(
         noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
     ) {
-        signalRoutes.register(T::class, lambda as SignalLambda)
+        signalRegistry.register(T::class, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Signal> extendSignal(
         noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
     ) {
-        signalRoutes.extend(T::class, lambda as SignalLambda)
+        signalRegistry.extend(T::class, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal fun <T : Transmission.Signal> signal(
-        routeKey: TransmissionRouteKey<T>,
+        transmissionId: TransmissionId<T>,
         lambda: suspend CommunicationScope.(signal: T) -> Unit,
     ) {
-        signalRoutes.register(routeKey, lambda as SignalLambda)
+        signalRegistry.register(transmissionId, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal fun <T : Transmission.Signal> extendSignal(
-        routeKey: TransmissionRouteKey<T>,
+        transmissionId: TransmissionId<T>,
         lambda: suspend CommunicationScope.(signal: T) -> Unit,
     ) {
-        signalRoutes.extend(routeKey, lambda as SignalLambda)
+        signalRegistry.extend(transmissionId, lambda as SignalLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Effect> effect(
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
-        effectRoutes.register(T::class, lambda as EffectLambda)
+        effectRegistry.register(T::class, lambda as EffectLambda)
     }
 
     @PublishedApi
     internal inline fun <reified T : Transmission.Effect> extendEffect(
         noinline lambda: suspend CommunicationScope.(effect: T) -> Unit
     ) {
-        effectRoutes.extend(T::class, lambda as EffectLambda)
+        effectRegistry.extend(T::class, lambda as EffectLambda)
     }
 
     @PublishedApi
     internal fun <T : Transmission.Effect> effect(
-        routeKey: TransmissionRouteKey<T>,
+        transmissionId: TransmissionId<T>,
         lambda: suspend CommunicationScope.(effect: T) -> Unit,
     ) {
-        effectRoutes.register(routeKey, lambda as EffectLambda)
+        effectRegistry.register(transmissionId, lambda as EffectLambda)
     }
 
     @PublishedApi
     internal fun <T : Transmission.Effect> extendEffect(
-        routeKey: TransmissionRouteKey<T>,
+        transmissionId: TransmissionId<T>,
         lambda: suspend CommunicationScope.(effect: T) -> Unit,
     ) {
-        effectRoutes.extend(routeKey, lambda as EffectLambda)
+        effectRegistry.extend(transmissionId, lambda as EffectLambda)
     }
 }

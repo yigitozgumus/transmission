@@ -1,53 +1,53 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
-import com.trendyol.transmission.router.TransmissionRouteKey
+import com.trendyol.transmission.router.TransmissionId
 import kotlin.reflect.KClass
 
 @PublishedApi
 internal class RouteRegistry<T : Transmission> {
-    private val routes = mutableMapOf<KClass<out T>, StackedLambda<T>>()
-    private val keyedRoutes = mutableMapOf<TransmissionRouteKey<*>, StackedLambda<T>>()
+    private val ids = mutableMapOf<KClass<out T>, StackedLambda<T>>()
+    private val keyedIds = mutableMapOf<TransmissionId<*>, StackedLambda<T>>()
 
     fun clear() {
-        routes.clear()
-        keyedRoutes.clear()
+        ids.clear()
+        keyedIds.clear()
     }
 
-    fun routeTypes(): Set<KClass<out T>> {
-        return routes.keys
+    fun registeredTypes(): Set<KClass<out T>> {
+        return ids.keys
     }
 
-    fun routeKeys(): Set<TransmissionRouteKey<*>> {
-        return keyedRoutes.keys
+    fun transmissionIds(): Set<TransmissionId<*>> {
+        return keyedIds.keys
     }
 
     @PublishedApi
     internal fun register(type: KClass<out T>, lambda: TransmissionLambda<T>) {
-        routes[type] = StackedLambda<T>().also { it.addOperation(lambda) }
+        ids[type] = StackedLambda<T>().also { it.addOperation(lambda) }
     }
 
     @PublishedApi
-    internal fun register(routeKey: TransmissionRouteKey<out T>, lambda: TransmissionLambda<T>) {
-        keyedRoutes[routeKey] = StackedLambda<T>().also { it.addOperation(lambda) }
+    internal fun register(transmissionId: TransmissionId<out T>, lambda: TransmissionLambda<T>) {
+        keyedIds[transmissionId] = StackedLambda<T>().also { it.addOperation(lambda) }
     }
 
     @PublishedApi
     internal fun extend(type: KClass<out T>, lambda: TransmissionLambda<T>) {
-        routes[type] = routes[type]
+        ids[type] = ids[type]
             ?.also { it.addOperation(lambda) }
             ?: StackedLambda<T>().also { it.addOperation(lambda) }
     }
 
     @PublishedApi
-    internal fun extend(routeKey: TransmissionRouteKey<out T>, lambda: TransmissionLambda<T>) {
-        keyedRoutes[routeKey] = keyedRoutes[routeKey]
+    internal fun extend(transmissionId: TransmissionId<out T>, lambda: TransmissionLambda<T>) {
+        keyedIds[transmissionId] = keyedIds[transmissionId]
             ?.also { it.addOperation(lambda) }
             ?: StackedLambda<T>().also { it.addOperation(lambda) }
     }
 
-    suspend fun dispatch(scope: CommunicationScope, transmission: T, routeKey: TransmissionRouteKey<*>? = null) {
-        routeKey?.let { keyedRoutes[it]?.execute(scope, transmission) }
-            ?: routes[transmission::class]?.execute(scope, transmission)
+    suspend fun dispatch(scope: CommunicationScope, transmission: T, transmissionId: TransmissionId<*>? = null) {
+        transmissionId?.let { keyedIds[it]?.execute(scope, transmission) }
+            ?: ids[transmission::class]?.execute(scope, transmission)
     }
 }

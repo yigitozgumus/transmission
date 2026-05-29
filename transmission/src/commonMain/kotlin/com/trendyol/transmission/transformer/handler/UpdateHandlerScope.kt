@@ -1,7 +1,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
-import com.trendyol.transmission.router.TransmissionRouteKey
+import com.trendyol.transmission.router.TransmissionId
 import com.trendyol.transmission.transformer.Transformer
 
 class UpdateHandlerScope internal constructor(val handlerRegistry: HandlerRegistry)
@@ -21,10 +21,10 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.extendEffect(
 }
 
 fun <T : Transmission.Effect> UpdateHandlerScope.extendEffect(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
-    handlerRegistry.extendEffect(routeKey, lambda)
+    handlerRegistry.extendEffect(transmissionId, lambda)
 }
 
 inline fun <reified T : Transmission.Signal> UpdateHandlerScope.extendSignal(
@@ -34,10 +34,10 @@ inline fun <reified T : Transmission.Signal> UpdateHandlerScope.extendSignal(
 }
 
 fun <T : Transmission.Signal> UpdateHandlerScope.extendSignal(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
-    handlerRegistry.extendSignal(routeKey, lambda)
+    handlerRegistry.extendSignal(transmissionId, lambda)
 }
 
 inline fun <reified T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
@@ -47,10 +47,10 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
 }
 
 fun <T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
-    handlerRegistry.effect(routeKey, lambda)
+    handlerRegistry.effect(transmissionId, lambda)
 }
 
 inline fun <reified T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
@@ -60,8 +60,8 @@ inline fun <reified T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
 }
 
 fun <T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
-    handlerRegistry.signal(routeKey, lambda)
+    handlerRegistry.signal(transmissionId, lambda)
 }

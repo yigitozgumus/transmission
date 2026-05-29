@@ -248,7 +248,7 @@ open class Transformer(
                         handlerRegistry.dispatchSignal(
                             communicationScope,
                             signal,
-                            envelope.routeKey,
+                            envelope.transmissionId,
                         )
                     } finally {
                         processing.complete()
@@ -291,7 +291,7 @@ open class Transformer(
                                     handlerRegistry.dispatchEffect(
                                         communicationScope,
                                         effect,
-                                        envelope.routeKey,
+                                        envelope.transmissionId,
                                     )
                                 } finally {
                                     processing.complete()

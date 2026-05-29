@@ -1,7 +1,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
-import com.trendyol.transmission.router.TransmissionRouteKey
+import com.trendyol.transmission.router.TransmissionId
 import com.trendyol.transmission.transformer.Transformer
 
 /**
@@ -114,14 +114,14 @@ inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
 }
 
 /**
- * Registers an effect handler with an explicit, generated route key for non-reflective indexed routing.
+ * Registers an effect handler with an explicit, generated transmission ID for non-reflective indexed routing.
  */
 inline fun <reified T : Transmission.Effect> HandlerScope.onEffect(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     noinline lambda: suspend CommunicationScope.(effect: T) -> Unit,
 ) {
     handlerRegistry.effect<T>(lambda)
-    handlerRegistry.effect(routeKey, lambda)
+    handlerRegistry.effect(transmissionId, lambda)
 }
 
 /**
@@ -159,12 +159,12 @@ inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
 }
 
 /**
- * Registers a signal handler with an explicit, generated route key for non-reflective indexed routing.
+ * Registers a signal handler with an explicit, generated transmission ID for non-reflective indexed routing.
  */
 inline fun <reified T : Transmission.Signal> HandlerScope.onSignal(
-    routeKey: TransmissionRouteKey<T>,
+    transmissionId: TransmissionId<T>,
     noinline lambda: suspend CommunicationScope.(signal: T) -> Unit,
 ) {
     handlerRegistry.signal<T>(lambda)
-    handlerRegistry.signal(routeKey, lambda)
+    handlerRegistry.signal(transmissionId, lambda)
 }

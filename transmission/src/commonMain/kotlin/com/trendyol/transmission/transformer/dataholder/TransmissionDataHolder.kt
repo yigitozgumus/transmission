@@ -5,7 +5,6 @@ import com.trendyol.transmission.router.TransmissionEnvelope
 import com.trendyol.transmission.transformer.Transformer
 import com.trendyol.transmission.transformer.request.Contract
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 
@@ -112,8 +111,7 @@ internal class TransmissionDataHolderImpl<T : Transmission.Data?>(
     }
 
     override suspend fun update(updater: (T) -> @UnsafeVariance T) {
-        holder.update(updater)
-        val holderData = holder.value ?: return
+        val holderData = holder.updateAndGet(updater) ?: return
         with(transformer) {
             storage.updateHolderData(holderData, contract.key)
             if (publishUpdates) publishDataHolderValue(holderData)

@@ -89,7 +89,7 @@ class TransmissionRouter internal constructor(
     private val exceptionHandler = CoroutineExceptionHandler { _, _ -> }
     private val routerScope = CoroutineScope(SupervisorJob() + dispatcher + exceptionHandler)
 
-    private val _transformerSet: MutableSet<Transformer> = mutableSetOf()
+    private val _transformerSet: LinkedHashSet<Transformer> = linkedSetOf()
     internal val transformerSet: Set<Transformer> = _transformerSet
 
     internal val routerName: String = identity.key
@@ -241,6 +241,7 @@ class TransmissionRouter internal constructor(
             _initializationError.update { null }
             try {
                 transformerSetLoader?.load()?.let { _transformerSet.addAll(it) }
+                validateLocalContracts(transformerSet)
                 initializeTransformers(transformerSet)
             } catch (throwable: Throwable) {
                 _initializationError.update { throwable }
@@ -335,7 +336,29 @@ class TransmissionRouter internal constructor(
             .map { key -> "computation:$key with ${other.routerName}" }
         val executionConflicts = globalExecutionKeys().intersect(other.globalExecutionKeys())
             .map { key -> "execution:$key with ${other.routerName}" }
-        return dataHolderConflicts + computationConflicts + executionConflicts
+        return (dataHolderConflicts + computationConflicts + executionConflicts).sorted()
+    }
+
+    private fun validateLocalContracts(transformerSet: Set<Transformer>) {
+        val conflicts = listOf(
+            duplicateContractMessages("dataHolder", transformerSet.flatMap { transformer -> transformer.storage.holderKeys() }),
+            duplicateContractMessages("computation", transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }),
+            duplicateContractMessages("execution", transformerSet.flatMap { transformer -> transformer.storage.executionKeys() }),
+        ).flatten()
+
+        check(conflicts.isEmpty()) {
+            "Duplicate local router contracts found for $routerName: ${conflicts.joinToString()}"
+        }
+    }
+
+    private fun duplicateContractMessages(type: String, keys: List<String>): List<String> {
+        return keys
+            .groupingBy { it }
+            .eachCount()
+            .filterValues { count -> count > 1 }
+            .keys
+            .sorted()
+            .map { key -> "$type:$key" }
     }
 
     private fun globalDataHolderKeys(): Set<String> {

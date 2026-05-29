@@ -1,7 +1,7 @@
 package com.trendyol.transmission.router.builder
 
 import com.trendyol.transmission.router.Capacity
-import com.trendyol.transmission.router.TransmissionRouteResolver
+import com.trendyol.transmission.router.TransmissionIdResolver
 import com.trendyol.transmission.router.TransmissionRouter.Companion.EMPTY_TRANSFORMER_SET_MESSAGE
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
@@ -18,7 +18,7 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
     internal var registerToGlobalRouter: Boolean = true
     internal var validateGlobalContracts: Boolean = false
     internal var capacity: Capacity = Capacity.Default
-    internal val routeResolvers: MutableList<TransmissionRouteResolver> = mutableListOf()
+    internal val transmissionIdResolvers: MutableList<TransmissionIdResolver> = mutableListOf()
 
     private val scopeImpl = object : TransmissionRouterBuilderScope {
 
@@ -54,8 +54,8 @@ internal class TransmissionRouterBuilderScopeImpl internal constructor(
             this@TransmissionRouterBuilderScopeImpl.validateGlobalContracts = enabled
         }
 
-        override fun addRouteResolver(resolver: TransmissionRouteResolver) {
-            this@TransmissionRouterBuilderScopeImpl.routeResolvers.add(resolver)
+        override fun addTransmissionIdResolver(resolver: TransmissionIdResolver) {
+            this@TransmissionRouterBuilderScopeImpl.transmissionIdResolvers.add(resolver)
         }
 
         override fun overrideInitialization() {

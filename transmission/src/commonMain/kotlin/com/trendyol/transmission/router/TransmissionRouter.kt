@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
@@ -23,46 +22,46 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlin.reflect.KClass
 
 /**
  * Central routing service that manages signal processing and data flow in Transmission applications.
- * 
+ *
  * TransmissionRouter acts as the coordination hub for all transformers in the system. It receives
- * [Transmission.Signal]s from UI components, routes them to appropriate transformers, manages
+ * [Transmission.Signal]s from UI components, ids them to appropriate transformers, manages
  * [Transmission.Effect] propagation between transformers, and streams [Transmission.Data] back to observers.
- * 
+ *
  * Key responsibilities:
  * - Route incoming signals to registered transformers
  * - Manage effect propagation between transformers
  * - Coordinate data streaming to observers
  * - Handle transformer lifecycle and cleanup
  * - Provide query-based communication between transformers
- * 
+ *
  * The router operates asynchronously using coroutines and provides backpressure handling
  * through configurable channel capacities.
- * 
+ *
  * @param identity Unique identifier for this router instance
  * @param transformerSetLoader Optional loader for transformer initialization
  * @param autoInitialization Whether to automatically initialize transformers on creation
  * @param capacity Buffer capacity for internal channels
  * @param dispatcher Coroutine dispatcher for router operations
- * 
+ *
  * @throws IllegalStateException when supplied [Transformer] set is empty during initialization
- * 
+ *
  * Example usage:
  * ```kotlin
  * val router = TransmissionRouter {
  *     addTransformerSet(setOf(userTransformer, dataTransformer))
  *     setCapacity(Capacity.Custom(128))
  * }
- * 
+ *
  * // Process signals
  * router.process(UserSignal.Login(credentials))
- * 
+ *
  * // Observe data
  * launch {
  *     router.streamData<UserData>().collect { userData ->
@@ -70,7 +69,7 @@ import kotlin.reflect.KClass
  *     }
  * }
  * ```
- * 
+ *
  * @see Transformer for implementing business logic
  * @see streamData for observing data streams
  * @see process for sending signals and effects
@@ -83,8 +82,8 @@ class TransmissionRouter internal constructor(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val registerToGlobalRouter: Boolean = true,
     private val validateGlobalContracts: Boolean = false,
-    private val routeResolvers: List<TransmissionRouteResolver> = emptyList(),
-): StreamOwner {
+    private val transmissionIdResolvers: List<TransmissionIdResolver> = emptyList(),
+) : StreamOwner {
 
     internal companion object {
         internal const val EMPTY_TRANSFORMER_SET_MESSAGE =
@@ -96,12 +95,16 @@ class TransmissionRouter internal constructor(
 
     private val _transformerSet: LinkedHashSet<Transformer> = linkedSetOf()
     internal val transformerSet: Set<Transformer> = _transformerSet
-    private val signalInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Signal>>> = mutableMapOf()
-    private val effectInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Effect>>> = mutableMapOf()
-    private var signalRoutes: Map<KClass<out Transmission.Signal>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
-    private var signalKeyRoutes: Map<TransmissionRouteKey<*>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> = emptyMap()
-    private var effectRoutes: Map<KClass<out Transmission.Effect>, List<Transformer>> = emptyMap()
-    private var effectKeyRoutes: Map<TransmissionRouteKey<*>, List<Transformer>> = emptyMap()
+    private val signalInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Signal>>> =
+        mutableMapOf()
+    private val effectInputs: MutableMap<Transformer, Channel<TransmissionEnvelope<Transmission.Effect>>> =
+        mutableMapOf()
+    private var signalIds: Map<KClass<out Transmission.Signal>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> =
+        emptyMap()
+    private var signalKeyIds: Map<TransmissionId<*>, List<SendChannel<TransmissionEnvelope<Transmission.Signal>>>> =
+        emptyMap()
+    private var effectIds: Map<KClass<out Transmission.Effect>, List<Transformer>> = emptyMap()
+    private var effectKeyIds: Map<TransmissionId<*>, List<Transformer>> = emptyMap()
     private var effectRoutingJob: Job? = null
 
     internal val routerName: String = identity.key
@@ -142,10 +145,10 @@ class TransmissionRouter internal constructor(
 
     /**
      * Provides access to the query system for inter-transformer communication.
-     * 
+     *
      * The query helper allows transformers to communicate with each other through
      * type-safe queries, enabling computations and executions across transformer boundaries.
-     * 
+     *
      * @see QueryHandler for available query operations
      * @see com.trendyol.transmission.transformer.request.Contract for defining query contracts
      */
@@ -163,26 +166,26 @@ class TransmissionRouter internal constructor(
 
     /**
      * Manually initializes the router with the specified [TransformerSetLoader].
-     * 
-     * This method is only available when auto-initialization is disabled via 
+     *
+     * This method is only available when auto-initialization is disabled via
      * [TransmissionRouterBuilderScope.overrideInitialization]. It allows for deferred
      * initialization of transformers, which can be useful for dependency injection
      * scenarios or when transformers need to be loaded dynamically.
-     * 
+     *
      * @param loader The transformer set loader containing the transformers to initialize
-     * 
+     *
      * @throws IllegalStateException if auto-initialization is enabled
-     * 
+     *
      * Example usage:
      * ```kotlin
      * val router = TransmissionRouter {
      *     overrideInitialization()
      * }
-     * 
+     *
      * // Later, when transformers are ready
      * router.initialize(MyTransformerSetLoader())
      * ```
-     * 
+     *
      * @see TransmissionRouterBuilderScope.overrideInitialization
      * @see TransformerSetLoader
      */
@@ -195,22 +198,22 @@ class TransmissionRouter internal constructor(
 
     /**
      * Processes a [Transmission.Signal] by routing it to all registered transformers.
-     * 
+     *
      * Signals represent user interactions or external events that need to be processed
      * by the application. This method broadcasts the signal to all transformers that
      * have registered handlers for the signal type.
-     * 
+     *
      * The processing is asynchronous and non-blocking. Signals are queued in an internal
      * channel with the configured capacity.
-     * 
+     *
      * @param signal The signal to process
-     * 
+     *
      * Example usage:
      * ```kotlin
      * router.process(UserSignal.Login(username, password))
      * router.process(DataSignal.Refresh)
      * ```
-     * 
+     *
      * @see Transmission.Signal
      * @see com.trendyol.transmission.transformer.handler.onSignal
      */
@@ -238,22 +241,22 @@ class TransmissionRouter internal constructor(
 
     /**
      * Processes a [Transmission.Effect] by routing it to appropriate transformers.
-     * 
+     *
      * Effects represent side effects or inter-transformer communications that need to be
      * processed. This method broadcasts the effect to transformers that have registered
      * handlers for the effect type.
-     * 
+     *
      * The processing is asynchronous and non-blocking. Effects are queued in an internal
      * channel with the configured capacity.
-     * 
+     *
      * @param effect The effect to process
-     * 
+     *
      * Example usage:
      * ```kotlin
      * router.process(NetworkEffect.ConnectionLost)
      * router.process(CacheEffect.Invalidate("user-data"))
      * ```
-     * 
+     *
      * @see Transmission.Effect
      * @see com.trendyol.transmission.transformer.handler.onEffect
      */
@@ -331,41 +334,46 @@ class TransmissionRouter internal constructor(
             signalInputs[transformer] = Channel(capacity = capacity.value)
             effectInputs[transformer] = Channel(capacity = capacity.value)
         }
-        signalRoutes = transformerSet
+        signalIds = transformerSet
             .flatMap { transformer ->
-                transformer.handlerRegistry.signalTypes().map { type -> type to signalInputs.getValue(transformer) }
+                transformer.handlerRegistry.signalTypes()
+                    .map { type -> type to signalInputs.getValue(transformer) }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
-        signalKeyRoutes = transformerSet
+        signalKeyIds = transformerSet
             .flatMap { transformer ->
-                transformer.handlerRegistry.signalRouteKeys().map { routeKey -> routeKey to signalInputs.getValue(transformer) }
+                transformer.handlerRegistry.signalRegistry.transmissionIds()
+                    .map { transmissionId -> transmissionId to signalInputs.getValue(transformer) }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
-        effectRoutes = transformerSet
+        effectIds = transformerSet
             .flatMap { transformer ->
                 transformer.handlerRegistry.effectTypes().map { type -> type to transformer }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
-        effectKeyRoutes = transformerSet
+        effectKeyIds = transformerSet
             .flatMap { transformer ->
-                transformer.handlerRegistry.effectRouteKeys().map { routeKey -> routeKey to transformer }
+                transformer.handlerRegistry.effectRegistry.transmissionIds()
+                    .map { transmissionId -> transmissionId to transformer }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
     }
 
     private suspend fun routeSignal(envelope: TransmissionEnvelope<Transmission.Signal>) {
-        val routeKey = routeKeyOf(envelope.payload)
-        val routedEnvelope = envelope.copy(routeKey = routeKey)
-        val inputs = routeKey?.let { signalKeyRoutes[it] } ?: signalRoutes[envelope.payload::class].orEmpty()
+        val transmissionId = transmissionIdOf(envelope.payload)
+        val routedEnvelope = envelope.copy(transmissionId = transmissionId)
+        val inputs =
+            transmissionId?.let { signalKeyIds[it] } ?: signalIds[envelope.payload::class].orEmpty()
         inputs.orEmpty().forEach { input ->
             input.send(routedEnvelope)
         }
     }
 
     private fun tryRouteSignal(envelope: TransmissionEnvelope<Transmission.Signal>): Boolean {
-        val routeKey = routeKeyOf(envelope.payload)
-        val routedEnvelope = envelope.copy(routeKey = routeKey)
-        val inputs = routeKey?.let { signalKeyRoutes[it] } ?: signalRoutes[envelope.payload::class].orEmpty()
+        val transmissionId = transmissionIdOf(envelope.payload)
+        val routedEnvelope = envelope.copy(transmissionId = transmissionId)
+        val inputs =
+            transmissionId?.let { signalKeyIds[it] } ?: signalIds[envelope.payload::class].orEmpty()
         return inputs.orEmpty().all { input -> input.trySend(routedEnvelope).isSuccess }
     }
 
@@ -379,9 +387,10 @@ class TransmissionRouter internal constructor(
     }
 
     private suspend fun routeEffect(envelope: TransmissionEnvelope<Transmission.Effect>) {
-        val routeKey = routeKeyOf(envelope.payload)
-        val routedEnvelope = envelope.copy(routeKey = routeKey)
-        val transformers = routeKey?.let { effectKeyRoutes[it] } ?: effectRoutes[envelope.payload::class].orEmpty()
+        val transmissionId = transmissionIdOf(envelope.payload)
+        val routedEnvelope = envelope.copy(transmissionId = transmissionId)
+        val transformers =
+            transmissionId?.let { effectKeyIds[it] } ?: effectIds[envelope.payload::class].orEmpty()
         transformers.orEmpty()
             .asSequence()
             .filter { transformer -> envelope.target == null || envelope.target == transformer.identity }
@@ -390,8 +399,8 @@ class TransmissionRouter internal constructor(
             }
     }
 
-    private fun routeKeyOf(transmission: Transmission): TransmissionRouteKey<*>? {
-        return routeResolvers.firstNotNullOfOrNull { resolver -> resolver.keyOf(transmission) }
+    private fun transmissionIdOf(transmission: Transmission): TransmissionId<*>? {
+        return transmissionIdResolvers.firstNotNullOfOrNull { resolver -> resolver.idOf(transmission) }
     }
 
     private fun startGlobalEffectBridge() {
@@ -420,17 +429,23 @@ class TransmissionRouter internal constructor(
     internal fun canResolve(query: QueryType): Boolean {
         return when (query) {
             is QueryType.Data<*> -> transformerSet.any { transformer ->
-                transformer.storage.isHolderStateInitialized() && transformer.storage.isHolderDataDefined(query.key)
+                transformer.storage.isHolderStateInitialized() && transformer.storage.isHolderDataDefined(
+                    query.key
+                )
             }
+
             is QueryType.Computation<*> -> transformerSet.any { transformer ->
                 transformer.storage.hasComputation(query.key)
             }
+
             is QueryType.ComputationWithArgs<*, *> -> transformerSet.any { transformer ->
                 transformer.storage.hasComputation(query.key)
             }
+
             is QueryType.Execution -> transformerSet.any { transformer ->
                 transformer.storage.hasExecution(query.key)
             }
+
             is QueryType.ExecutionWithArgs<*> -> transformerSet.any { transformer ->
                 transformer.storage.hasExecution(query.key)
             }
@@ -457,9 +472,15 @@ class TransmissionRouter internal constructor(
 
     private fun validateLocalContracts(transformerSet: Set<Transformer>) {
         val conflicts = listOf(
-            duplicateContractMessages("dataHolder", transformerSet.flatMap { transformer -> transformer.storage.holderKeys() }),
-            duplicateContractMessages("computation", transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }),
-            duplicateContractMessages("execution", transformerSet.flatMap { transformer -> transformer.storage.executionKeys() }),
+            duplicateContractMessages(
+                "dataHolder",
+                transformerSet.flatMap { transformer -> transformer.storage.holderKeys() }),
+            duplicateContractMessages(
+                "computation",
+                transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }),
+            duplicateContractMessages(
+                "execution",
+                transformerSet.flatMap { transformer -> transformer.storage.executionKeys() }),
         ).flatten()
 
         check(conflicts.isEmpty()) {
@@ -482,7 +503,8 @@ class TransmissionRouter internal constructor(
     }
 
     private fun globalComputationKeys(): Set<String> {
-        return transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }.toSet()
+        return transformerSet.flatMap { transformer -> transformer.storage.computationKeys() }
+            .toSet()
     }
 
     private fun globalExecutionKeys(): Set<String> {
@@ -491,15 +513,15 @@ class TransmissionRouter internal constructor(
 
     /**
      * Clears the router and all its transformers, releasing all resources.
-     * 
+     *
      * This method should be called when the router is no longer needed to ensure
      * proper cleanup of resources. It performs the following operations:
      * 1. Clears all registered transformers
      * 2. Cancels the router's coroutine scope
      * 3. Closes all internal channels
-     * 
+     *
      * After calling this method, the router should not be used anymore.
-     * 
+     *
      * Example usage:
      * ```kotlin
      * // In a ViewModel or similar lifecycle-aware component
@@ -508,7 +530,7 @@ class TransmissionRouter internal constructor(
      *     router.clear()
      * }
      * ```
-     * 
+     *
      * @see Transformer.clear
      */
     fun clear() {

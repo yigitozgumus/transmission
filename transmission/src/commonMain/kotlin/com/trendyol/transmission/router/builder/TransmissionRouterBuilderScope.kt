@@ -3,7 +3,7 @@ package com.trendyol.transmission.router.builder
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.router.Capacity
 import com.trendyol.transmission.router.GlobalTransmissionRouter
-import com.trendyol.transmission.router.TransmissionRouteResolver
+import com.trendyol.transmission.router.TransmissionIdResolver
 import com.trendyol.transmission.router.TransmissionRouter
 import com.trendyol.transmission.router.loader.TransformerSetLoader
 import com.trendyol.transmission.transformer.Transformer
@@ -118,7 +118,7 @@ interface TransmissionRouterBuilderScope {
     /**
      * Adds a generated or explicit route resolver for non-reflective signal/effect routing.
      */
-    fun addRouteResolver(resolver: TransmissionRouteResolver)
+    fun addTransmissionIdResolver(resolver: TransmissionIdResolver)
 
     /**
      * Disables automatic initialization of the [TransmissionRouter].

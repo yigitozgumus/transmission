@@ -2,6 +2,7 @@ package com.trendyol.transmission.transformer
 
 import com.trendyol.transmission.Transmission
 import com.trendyol.transmission.router.Capacity
+import com.trendyol.transmission.router.TransmissionId
 import com.trendyol.transmission.transformer.dataholder.TransmissionDataHolder
 import com.trendyol.transmission.transformer.dataholder.dataHolder
 import com.trendyol.transmission.transformer.handler.CommunicationScope
@@ -110,6 +111,26 @@ class TransformerConfigurationScope @PublishedApi internal constructor(
     ) {
         transformer.addHandlers {
             onEffect(lambda)
+        }
+    }
+
+    /** Appends an effect handler with a generated or explicit transmission ID. */
+    inline fun <reified T : Transmission.Effect> onEffect(
+        transmissionId: TransmissionId<T>,
+        noinline lambda: suspend CommunicationScope.(effect: T) -> Unit,
+    ) {
+        transformer.addHandlers {
+            onEffect(transmissionId, lambda)
+        }
+    }
+
+    /** Appends a signal handler with a generated or explicit transmission ID. */
+    inline fun <reified T : Transmission.Signal> onSignal(
+        transmissionId: TransmissionId<T>,
+        noinline lambda: suspend CommunicationScope.(signal: T) -> Unit,
+    ) {
+        transformer.addHandlers {
+            onSignal(transmissionId, lambda)
         }
     }
 

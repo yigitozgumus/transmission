@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.ksp)
     id("com.trendyol.transmission.android.application")
     id("com.trendyol.transmission.kotlin.multiplatform")
 }
@@ -17,6 +18,9 @@ kotlin {
     sourceSets {
         applyDefaultHierarchyTemplate()
         val desktopMain by getting
+        commonMain {
+            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
+        }
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
@@ -52,6 +56,20 @@ kotlin {
     }
 }
 
+dependencies {
+    add("kspCommonMainMetadata", project(":transmission-id-processor"))
+}
+
+// Wire KSP metadata generation before any target compilation so generated code is available
+tasks.matching { task ->
+    task.name.contains("Kotlin", ignoreCase = false) &&
+        task.name.startsWith("compile") &&
+        !task.name.contains("Metadata", ignoreCase = true) &&
+        !task.name.contains("check", ignoreCase = true) &&
+        !task.name.contains("Test", ignoreCase = true)
+}.configureEach {
+    dependsOn(tasks.named("kspCommonMainKotlinMetadata"))
+}
 
 compose.desktop {
     application {

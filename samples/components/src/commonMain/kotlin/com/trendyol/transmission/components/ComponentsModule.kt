@@ -1,9 +1,12 @@
+@file:OptIn(com.trendyol.transmission.router.ExperimentalTransmissionIdGeneration::class)
+
 package com.trendyol.transmission.components
 
 import com.trendyol.transmission.components.colorpicker.ColorPickerTransformer
 import com.trendyol.transmission.components.input.InputTransformer
 import com.trendyol.transmission.components.multioutput.MultiOutputTransformer
 import com.trendyol.transmission.components.output.OutputTransformer
+import com.trendyol.transmission.router.autoDiscoverIds
 import com.trendyol.transmission.router.builder.TransmissionRouter
 import com.trendyol.transmission.transformer.Transformer
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +45,7 @@ val featuresModule = module {
         TransmissionRouter {
             addTransformerSet(get<List<Transformer>>().toSet())
             addDispatcher(get(named("DefaultDispatcher")))
+            autoDiscoverIds()
         }
     }
 }

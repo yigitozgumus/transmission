@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.dokka)
+    alias(libs.plugins.ksp) apply false
 }
 
 // Version management for API docs

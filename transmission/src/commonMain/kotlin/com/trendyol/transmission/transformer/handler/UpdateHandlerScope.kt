@@ -1,6 +1,7 @@
 package com.trendyol.transmission.transformer.handler
 
 import com.trendyol.transmission.Transmission
+import com.trendyol.transmission.router.TransmissionId
 import com.trendyol.transmission.transformer.Transformer
 
 class UpdateHandlerScope internal constructor(val handlerRegistry: HandlerRegistry)
@@ -19,10 +20,24 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.extendEffect(
     handlerRegistry.extendEffect<T>(lambda)
 }
 
+fun <T : Transmission.Effect> UpdateHandlerScope.extendEffect(
+    transmissionId: TransmissionId<T>,
+    lambda: suspend CommunicationScope.(effect: T) -> Unit,
+) {
+    handlerRegistry.extendEffect(transmissionId, lambda)
+}
+
 inline fun <reified T : Transmission.Signal> UpdateHandlerScope.extendSignal(
     noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
 ) {
     handlerRegistry.extendSignal<T>(lambda)
+}
+
+fun <T : Transmission.Signal> UpdateHandlerScope.extendSignal(
+    transmissionId: TransmissionId<T>,
+    lambda: suspend CommunicationScope.(signal: T) -> Unit,
+) {
+    handlerRegistry.extendSignal(transmissionId, lambda)
 }
 
 inline fun <reified T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
@@ -31,8 +46,22 @@ inline fun <reified T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
     handlerRegistry.effect<T>(lambda)
 }
 
+fun <T : Transmission.Effect> UpdateHandlerScope.overrideEffect(
+    transmissionId: TransmissionId<T>,
+    lambda: suspend CommunicationScope.(effect: T) -> Unit,
+) {
+    handlerRegistry.effect(transmissionId, lambda)
+}
+
 inline fun <reified T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
     noinline lambda: suspend CommunicationScope.(signal: T) -> Unit
 ) {
     handlerRegistry.signal<T>(lambda)
+}
+
+fun <T : Transmission.Signal> UpdateHandlerScope.overrideSignal(
+    transmissionId: TransmissionId<T>,
+    lambda: suspend CommunicationScope.(signal: T) -> Unit,
+) {
+    handlerRegistry.signal(transmissionId, lambda)
 }

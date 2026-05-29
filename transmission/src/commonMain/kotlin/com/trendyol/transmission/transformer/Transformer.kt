@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -249,6 +248,7 @@ open class Transformer(
                         handlerRegistry.dispatchSignal(
                             communicationScope,
                             signal,
+                            envelope.transmissionId,
                         )
                     } finally {
                         processing.complete()
@@ -282,15 +282,16 @@ open class Transformer(
                     incoming
                         .filterNot { it.payload is RouterEffect }
                         .filterNot { it.payload is RouterEffectWithType<*> }
-                        .map { it.payload }
-                        .collect { effect ->
+                        .collect { envelope ->
                             effectProcessingQueue.send {
+                                val effect = envelope.payload
                                 val processing = Job()
                                 currentEffectProcessing = processing
                                 try {
                                     handlerRegistry.dispatchEffect(
                                         communicationScope,
                                         effect,
+                                        envelope.transmissionId,
                                     )
                                 } finally {
                                     processing.complete()
